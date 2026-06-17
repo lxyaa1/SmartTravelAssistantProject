@@ -4,6 +4,7 @@ from datetime import date, datetime, time, timedelta
 
 from backend.agents.llm import generate_initial_plan_with_llm, replan_with_llm, should_use_llm
 from backend.graph.state import TripState
+from backend.mcp.amap import execute_amap_mcp_query_plan, should_use_amap_mcp
 from backend.schemas.trip import (
     AccommodationAreaResult,
     AttractionResult,
@@ -86,6 +87,7 @@ def parse_request_node(state: TripState) -> TripState:
         "plan_versions": state.get("plan_versions", []),
         "pending_mcp_queries": McpQueryPlan(),
         "mcp_results": state.get("mcp_results", McpResults()),
+        "mcp_errors": state.get("mcp_errors", []),
         "issues": [],
     }
 
@@ -284,22 +286,34 @@ def plan_check_query_planner_node(state: TripState) -> TripState:
 
 def collect_mcp_data_node(state: TripState) -> TripState:
     """Execute pending MCP queries and merge their results into state."""
+    query_plan = state.get("pending_mcp_queries", McpQueryPlan())
     agent_input = DataCollectorInput(
-        query_plan=state.get("pending_mcp_queries", McpQueryPlan()),
+        query_plan=query_plan,
         existing_results=state.get("mcp_results", McpResults()),
         default_city=state["user_request"].destination,
     )
-    collected = McpResults()
+    errors = list(state.get("mcp_errors", []))
 
-    for query in agent_input.query_plan.queries:
-        collected = _merge_mcp_results(
-            collected,
-            _execute_mock_mcp_query(query, default_city=agent_input.default_city),
-        )
+    if should_use_amap_mcp(state):
+        try:
+            collected = execute_amap_mcp_query_plan(
+                query_plan=agent_input.query_plan,
+                default_city=agent_input.default_city,
+            )
+        except Exception as exc:
+            errors.append(f"Amap MCP failed, fell back to mock MCP: {exc}")
+            collected = _execute_mock_mcp_query_plan(agent_input.query_plan, default_city=agent_input.default_city)
+    else:
+        collected = _execute_mock_mcp_query_plan(agent_input.query_plan, default_city=agent_input.default_city)
 
     merged_results = _merge_mcp_results(agent_input.existing_results, collected)
     output = DataCollectorOutput(mcp_results=merged_results)
-    return {**state, "mcp_results": output.mcp_results, "pending_mcp_queries": McpQueryPlan()}
+    return {
+        **state,
+        "mcp_results": output.mcp_results,
+        "pending_mcp_queries": McpQueryPlan(),
+        "mcp_errors": errors,
+    }
 
 
 def validate_plan_node(state: TripState) -> TripState:
@@ -534,6 +548,16 @@ def _date_range(start: date, end: date) -> list[date]:
         raise ValueError("end_date must be on or after start_date")
     days = (end - start).days + 1
     return [start + timedelta(days=offset) for offset in range(days)]
+
+
+def _execute_mock_mcp_query_plan(query_plan: McpQueryPlan, default_city: str) -> McpResults:
+    collected = McpResults()
+    for query in query_plan.queries:
+        collected = _merge_mcp_results(
+            collected,
+            _execute_mock_mcp_query(query, default_city=default_city),
+        )
+    return collected
 
 
 def _execute_mock_mcp_query(query: McpQuery, default_city: str) -> McpResults:

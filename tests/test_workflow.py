@@ -9,6 +9,7 @@ def test_workflow_replans_and_returns_final_plan() -> None:
     result = workflow.invoke(
         {
             "use_llm": False,
+            "mcp_backend": "mock",
             "raw_user_input": {
                 "origin": "Shanghai",
                 "destination": "Hangzhou",
@@ -45,6 +46,7 @@ def test_workflow_stops_at_max_iterations_and_keeps_issues() -> None:
     result = workflow.invoke(
         {
             "use_llm": False,
+            "mcp_backend": "mock",
             "raw_user_input": {
                 "origin": "Shanghai",
                 "destination": "Hangzhou",

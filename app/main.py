@@ -7,6 +7,7 @@ def main() -> None:
     workflow = build_workflow()
     result = workflow.invoke(
         {
+            "mcp_backend": "amap",
             "raw_user_input": {
                 "origin": "Shanghai",
                 "destination": "Hangzhou",
@@ -33,6 +34,10 @@ def main() -> None:
         print("\nUnresolved issues:")
         for issue in final_plan.unresolved_issues:
             print(f"- {issue.severity}: {issue.reason}")
+    if result.get("mcp_errors"):
+        print("\nMCP warnings:")
+        for error in result["mcp_errors"]:
+            print(f"- {error}")
 
 
 if __name__ == "__main__":

@@ -9,8 +9,8 @@ This is intentionally a minimal runnable skeleton:
 - Pydantic schemas for user requests, trip plans, MCP results, and validation issues.
 - Structured traveler and accommodation requirements, including children who count as travelers but do not need separate beds.
 - LangGraph workflow with pre-plan MCP queries, plan-check MCP queries, validation, and replanning.
-- Mock MCP stdio server scaffold.
-- No real API calls, login, database, or UI yet.
+- Mock MCP stdio server scaffold plus optional Bailian official Amap Maps MCP backend.
+- No login, database, or UI yet.
 
 ## Run
 
@@ -48,6 +48,50 @@ Current LLM-backed nodes:
 - `replan`: revises the current structured `TripPlan` based on validation issues.
 
 The query planners, MCP data collection, validation routing, and final markdown rendering remain deterministic Python nodes.
+
+## MCP Backend Configuration
+
+The project can call Bailian's official Amap Maps MCP server through Streamable HTTP. It uses the same `DASHSCOPE_API_KEY` environment variable.
+
+```powershell
+$env:DASHSCOPE_API_KEY="your-api-key"
+$env:TRAVEL_AGENT_MCP_BACKEND="amap"
+```
+
+The Amap MCP endpoint is:
+
+```text
+https://dashscope.aliyuncs.com/api/v1/mcps/amap-maps/mcp
+```
+
+Mapped Amap tools:
+
+```text
+maps_weather
+maps_text_search
+maps_search_detail
+maps_geo
+maps_direction_driving
+maps_direction_walking
+maps_direction_transit_integrated
+maps_distance
+```
+
+Internal query mapping:
+
+```text
+get_weather                 -> maps_weather
+search_attractions          -> maps_text_search
+search_accommodation_areas  -> maps_text_search
+get_attraction_detail       -> maps_text_search + maps_search_detail
+get_route_time              -> maps_geo + direction/distance tools
+```
+
+If Amap MCP fails, the workflow records the error in `mcp_errors` and falls back to the local mock MCP data so the graph can still complete. To force mock MCP:
+
+```powershell
+$env:TRAVEL_AGENT_MCP_BACKEND="mock"
+```
 
 ## Traveler Input
 
@@ -127,5 +171,5 @@ The mock data intentionally includes conflicts:
 ## Next Steps
 
 1. Replace deterministic node logic with LangChain LLM calls that still return the same Pydantic schemas.
-2. Move the in-process mock query executor inside `collect_mcp_data_node` to `langchain-mcp-adapters`.
+2. Replace remaining mock-only fields with richer Amap MCP result parsing.
 3. Add a Streamlit page after the backend loop is stable.

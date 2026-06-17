@@ -19,3 +19,18 @@ MOCK_TRAVEL_TOOLS = ToolGroup(
         "search_accommodation_areas",
     ),
 )
+
+
+AMAP_MAPS_TOOLS = ToolGroup(
+    name="amap_maps",
+    tool_names=(
+        "maps_weather",
+        "maps_text_search",
+        "maps_search_detail",
+        "maps_geo",
+        "maps_direction_driving",
+        "maps_direction_walking",
+        "maps_direction_transit_integrated",
+        "maps_distance",
+    ),
+)
