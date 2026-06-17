@@ -7,6 +7,7 @@ from backend.schemas.trip import FinalPlan, McpQueryPlan, McpResults, TripPlan, 
 
 class TripState(TypedDict, total=False):
     raw_user_input: dict
+    use_llm: bool
     user_request: TripRequest
     pending_mcp_queries: McpQueryPlan
     current_plan: TripPlan

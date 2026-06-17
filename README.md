@@ -18,6 +18,37 @@ This is intentionally a minimal runnable skeleton:
 python -m app.main
 ```
 
+## LLM Configuration
+
+The project can use Alibaba Cloud Model Studio / DashScope through its OpenAI-compatible chat completions API.
+
+Required environment variable:
+
+```powershell
+$env:DASHSCOPE_API_KEY="your-api-key"
+```
+
+Optional environment variables:
+
+```powershell
+$env:DASHSCOPE_MODEL="qwen-plus"
+$env:DASHSCOPE_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+$env:TRAVEL_AGENT_USE_LLM="true"
+```
+
+If `DASHSCOPE_API_KEY` is present, LLM mode is enabled by default. To force deterministic mock planning:
+
+```powershell
+$env:TRAVEL_AGENT_USE_LLM="false"
+```
+
+Current LLM-backed nodes:
+
+- `initial_plan`: generates a structured `TripPlan`.
+- `replan`: revises the current structured `TripPlan` based on validation issues.
+
+The query planners, MCP data collection, validation routing, and final markdown rendering remain deterministic Python nodes.
+
 ## Traveler Input
 
 `travelers` can still be a legacy integer, which is treated as the number of adults:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 
+from backend.agents.llm import generate_initial_plan_with_llm, replan_with_llm, should_use_llm
 from backend.graph.state import TripState
 from backend.schemas.trip import (
     AccommodationAreaResult,
@@ -144,6 +145,11 @@ def initial_plan_node(state: TripState) -> TripState:
     )
     request = agent_input.request
     mcp_results = agent_input.mcp_results
+    if should_use_llm(state):
+        plan = generate_initial_plan_with_llm(request=request, mcp_results=mcp_results)
+        output = RoutePlannerOutput(plan=plan)
+        return {**state, "current_plan": output.plan}
+
     days = _date_range(request.start_date, request.end_date)
     plan_days: list[PlanDay] = []
     must_visit_day = _choose_must_visit_day(request, mcp_results, days)
@@ -395,6 +401,25 @@ def replan_node(state: TripState) -> TripState:
     request = agent_input.request
     current_plan = agent_input.current_plan
     plan_versions = [*state.get("plan_versions", []), current_plan]
+
+    if should_use_llm(state):
+        next_plan = replan_with_llm(
+            request=request,
+            current_plan=current_plan,
+            issues=agent_input.issues,
+            mcp_results=agent_input.mcp_results,
+        )
+        _sync_transfer_names(next_plan)
+        _recalculate_plan_totals(next_plan)
+        output = ReplannerOutput(plan=next_plan, addressed_issues=agent_input.issues)
+        return {
+            **state,
+            "current_plan": output.plan,
+            "plan_versions": plan_versions,
+            "iteration": state.get("iteration", 0) + 1,
+            "issues": [],
+        }
+
     next_plan = current_plan.model_copy(deep=True)
     issue_types = {issue.issue_type for issue in agent_input.issues}
     bad_weather_locations = {

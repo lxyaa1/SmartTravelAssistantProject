@@ -8,6 +8,7 @@ def test_workflow_replans_and_returns_final_plan() -> None:
     workflow = build_workflow()
     result = workflow.invoke(
         {
+            "use_llm": False,
             "raw_user_input": {
                 "origin": "Shanghai",
                 "destination": "Hangzhou",
@@ -43,6 +44,7 @@ def test_workflow_stops_at_max_iterations_and_keeps_issues() -> None:
     workflow = build_workflow()
     result = workflow.invoke(
         {
+            "use_llm": False,
             "raw_user_input": {
                 "origin": "Shanghai",
                 "destination": "Hangzhou",
