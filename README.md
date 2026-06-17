@@ -8,7 +8,7 @@ This is intentionally a minimal runnable skeleton:
 
 - Pydantic schemas for user requests, trip plans, MCP results, and validation issues.
 - Structured traveler and accommodation requirements, including children who count as travelers but do not need separate beds.
-- LangGraph workflow with a `plan -> collect mock data -> validate -> replan -> final` loop.
+- LangGraph workflow with pre-plan MCP queries, plan-check MCP queries, validation, and replanning.
 - Mock MCP stdio server scaffold.
 - No real API calls, login, database, or UI yet.
 
@@ -47,13 +47,25 @@ In this example, `total_people` is 3 for tickets, transport, food, and route int
 
 ```text
 parse_request
+  -> preplan_query_planner
+  -> collect_preplan_mcp_data
   -> initial_plan
-  -> collect_mcp_data
+  -> plan_check_query_planner
+  -> collect_plan_mcp_data
   -> validate_plan
   -> replan or final_writer
 ```
 
-The mock data intentionally creates bad weather and long route issues so the replanning branch can be exercised.
+If validation finds `high` or `critical` issues and the loop has not reached `max_iterations`, `replan` sends the flow back to `plan_check_query_planner`.
+
+```text
+replan
+  -> plan_check_query_planner
+  -> collect_plan_mcp_data
+  -> validate_plan
+```
+
+The MCP data collection node consumes `pending_mcp_queries`, merges results into `mcp_results`, and clears the pending query list.
 
 ## Mock MCP Server
 
@@ -70,17 +82,19 @@ get_weather(city, date)
 get_route_time(origin, destination, mode)
 get_attraction_detail(name, date)
 search_attractions(city, preferences)
+search_accommodation_areas(city, budget_level, prefer_family_room)
 ```
 
 The mock data intentionally includes conflicts:
 
 - Dates ending in `-01` return heavy rain, making outdoor plans risky.
 - Museum visits on dates ending in `-02` return closed.
-- Routes involving `West Lake`, `Remote`, or `Mountain` return a long 150-minute transfer.
+- Routes between `West Lake` and a museum, or routes involving `Remote` / `Mountain`, return a long 150-minute transfer.
 - `search_attractions` returns both outdoor options and indoor rainy-day backups.
+- `search_accommodation_areas` returns area-level lodging options, not specific hotels.
 
 ## Next Steps
 
 1. Replace deterministic node logic with LangChain LLM calls that still return the same Pydantic schemas.
-2. Move `collect_mcp_data_node` from in-process mock data to `langchain-mcp-adapters`.
+2. Move the in-process mock query executor inside `collect_mcp_data_node` to `langchain-mcp-adapters`.
 3. Add a Streamlit page after the backend loop is stable.

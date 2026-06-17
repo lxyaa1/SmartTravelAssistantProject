@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date as Date
 from datetime import time
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
@@ -56,11 +56,26 @@ class Severity(str, Enum):
 
 class AgentName(str, Enum):
     INPUT_PARSER = "input_parser"
+    PREPLAN_QUERY_PLANNER = "preplan_query_planner"
     ROUTE_PLANNER = "route_planner"
+    PLAN_CHECK_QUERY_PLANNER = "plan_check_query_planner"
     DATA_COLLECTOR = "data_collector"
     VALIDATOR = "validator"
     REPLANNER = "replanner"
     FINAL_WRITER = "final_writer"
+
+
+class McpToolName(str, Enum):
+    GET_WEATHER = "get_weather"
+    GET_ROUTE_TIME = "get_route_time"
+    GET_ATTRACTION_DETAIL = "get_attraction_detail"
+    SEARCH_ATTRACTIONS = "search_attractions"
+    SEARCH_ACCOMMODATION_AREAS = "search_accommodation_areas"
+
+
+class McpQueryStage(str, Enum):
+    PREPLAN = "preplan"
+    PLAN_CHECK = "plan_check"
 
 
 class TravelerGroup(BaseModel):
@@ -219,10 +234,21 @@ class AttractionResult(BaseModel):
     name: str
     city: str
     category: PlaceCategory
+    date: Date | None = None
     is_open: bool = True
     opening_hours: str = "09:00-18:00"
     ticket_price: float = Field(default=0, ge=0)
     recommended_duration_minutes: int = Field(default=120, ge=0)
+    notes: str = ""
+
+
+class AccommodationAreaResult(BaseModel):
+    area_name: str
+    city: str
+    pros: list[str] = Field(default_factory=list)
+    cons: list[str] = Field(default_factory=list)
+    suitable_for: list[str] = Field(default_factory=list)
+    estimated_price_level: BudgetLevel = BudgetLevel.MEDIUM
     notes: str = ""
 
 
@@ -238,6 +264,18 @@ class McpResults(BaseModel):
     weather: list[WeatherResult] = Field(default_factory=list)
     attractions: list[AttractionResult] = Field(default_factory=list)
     routes: list[RouteResult] = Field(default_factory=list)
+    accommodation_areas: list[AccommodationAreaResult] = Field(default_factory=list)
+
+
+class McpQuery(BaseModel):
+    tool_name: McpToolName
+    args: dict[str, Any] = Field(default_factory=dict)
+    purpose: str
+    stage: McpQueryStage
+
+
+class McpQueryPlan(BaseModel):
+    queries: list[McpQuery] = Field(default_factory=list)
 
 
 class ValidationIssue(BaseModel):
@@ -264,8 +302,18 @@ class ParsedRequestOutput(BaseModel):
     request: TripRequest
 
 
+class PreplanQueryPlannerInput(BaseModel):
+    request: TripRequest
+
+
+class PreplanQueryPlannerOutput(BaseModel):
+    agent: Literal[AgentName.PREPLAN_QUERY_PLANNER] = AgentName.PREPLAN_QUERY_PLANNER
+    query_plan: McpQueryPlan
+
+
 class RoutePlannerInput(BaseModel):
     request: TripRequest
+    mcp_results: McpResults = Field(default_factory=McpResults)
 
 
 class RoutePlannerOutput(BaseModel):
@@ -273,8 +321,19 @@ class RoutePlannerOutput(BaseModel):
     plan: TripPlan
 
 
-class DataCollectorInput(BaseModel):
+class PlanCheckQueryPlannerInput(BaseModel):
     plan: TripPlan
+
+
+class PlanCheckQueryPlannerOutput(BaseModel):
+    agent: Literal[AgentName.PLAN_CHECK_QUERY_PLANNER] = AgentName.PLAN_CHECK_QUERY_PLANNER
+    query_plan: McpQueryPlan
+
+
+class DataCollectorInput(BaseModel):
+    query_plan: McpQueryPlan
+    existing_results: McpResults = Field(default_factory=McpResults)
+    default_city: str
 
 
 class DataCollectorOutput(BaseModel):

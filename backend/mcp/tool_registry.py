@@ -16,5 +16,6 @@ MOCK_TRAVEL_TOOLS = ToolGroup(
         "get_route_time",
         "get_attraction_detail",
         "search_attractions",
+        "search_accommodation_areas",
     ),
 )

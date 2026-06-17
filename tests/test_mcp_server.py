@@ -8,6 +8,7 @@ from mcp_servers.mock_travel_server.server import (
     get_attraction_detail,
     get_route_time,
     get_weather,
+    search_accommodation_areas,
     search_attractions,
 )
 
@@ -46,3 +47,11 @@ def test_mock_search_attractions_returns_outdoor_and_indoor_options() -> None:
 
     assert "outdoor" in categories
     assert "indoor" in categories
+
+
+def test_mock_search_accommodation_areas_returns_area_options() -> None:
+    results = search_accommodation_areas("Hangzhou", "medium", True)
+
+    assert results
+    assert results[0]["area_name"] == "Hangzhou Lakeside Area"
+    assert "families" in results[0]["suitable_for"]

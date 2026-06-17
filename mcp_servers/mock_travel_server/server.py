@@ -27,7 +27,11 @@ def get_weather(city: str, date: str):
 @mcp.tool()
 def get_route_time(origin: str, destination: str, mode: str = "taxi"):
     """Return deterministic mock route duration."""
-    long_route = any(keyword in origin or keyword in destination for keyword in LONG_ROUTE_KEYWORDS)
+    long_route = (
+        ("West Lake" in origin and "Museum" in destination)
+        or ("Museum" in origin and "West Lake" in destination)
+        or any(keyword in origin or keyword in destination for keyword in LONG_ROUTE_KEYWORDS[1:])
+    )
     return {
         "origin": origin,
         "destination": destination,
@@ -74,6 +78,32 @@ def search_attractions(city: str, preferences: list[str] | None = None):
             "city": city,
             "category": "culture",
             "match_reason": f"Matches preferences: {', '.join(preferences) or 'general travel'}.",
+        },
+    ]
+
+
+@mcp.tool()
+def search_accommodation_areas(city: str, budget_level: str = "medium", prefer_family_room: bool = False):
+    """Return deterministic mock accommodation areas instead of specific hotels."""
+    family_note = "Family-room friendly." if prefer_family_room else "Standard traveler fit."
+    return [
+        {
+            "area_name": f"{city} Lakeside Area",
+            "city": city,
+            "pros": ["Close to major sights", "Easy dining access"],
+            "cons": ["Can be crowded on holidays"],
+            "suitable_for": ["first-time visitors", "relaxed trips", "families"],
+            "estimated_price_level": "medium" if budget_level != "low" else "high",
+            "notes": family_note,
+        },
+        {
+            "area_name": f"{city} Railway Station Area",
+            "city": city,
+            "pros": ["Convenient transfers", "Usually better value"],
+            "cons": ["Less scenic"],
+            "suitable_for": ["budget trips", "early departures"],
+            "estimated_price_level": "low" if budget_level == "low" else "medium",
+            "notes": family_note,
         },
     ]
 

@@ -4,6 +4,7 @@ from datetime import date, datetime, time, timedelta
 
 from backend.graph.state import TripState
 from backend.schemas.trip import (
+    AccommodationAreaResult,
     AttractionResult,
     BudgetLevel,
     DataCollectorInput,
@@ -12,10 +13,18 @@ from backend.schemas.trip import (
     FinalWriterInput,
     FinalWriterOutput,
     IssueType,
+    McpQuery,
+    McpQueryPlan,
+    McpQueryStage,
     McpResults,
+    McpToolName,
     ParsedRequestOutput,
     PlanDay,
+    PlanCheckQueryPlannerInput,
+    PlanCheckQueryPlannerOutput,
     PlaceCategory,
+    PreplanQueryPlannerInput,
+    PreplanQueryPlannerOutput,
     ReplannerInput,
     ReplannerOutput,
     RouteResult,
@@ -31,6 +40,13 @@ from backend.schemas.trip import (
     ValidatorOutput,
     VisitSlot,
     WeatherResult,
+)
+from mcp_servers.mock_travel_server.server import (
+    get_attraction_detail as mock_get_attraction_detail,
+    get_route_time as mock_get_route_time,
+    get_weather as mock_get_weather,
+    search_accommodation_areas as mock_search_accommodation_areas,
+    search_attractions as mock_search_attractions,
 )
 
 
@@ -67,26 +83,91 @@ def parse_request_node(state: TripState) -> TripState:
         "iteration": state.get("iteration", 0),
         "max_iterations": state.get("max_iterations", 3),
         "plan_versions": state.get("plan_versions", []),
+        "pending_mcp_queries": McpQueryPlan(),
+        "mcp_results": state.get("mcp_results", McpResults()),
         "issues": [],
     }
 
 
+def preplan_query_planner_node(state: TripState) -> TripState:
+    """Plan broad MCP queries needed before drafting an itinerary."""
+    agent_input = PreplanQueryPlannerInput(request=state["user_request"])
+    request = agent_input.request
+    queries: list[McpQuery] = [
+        McpQuery(
+            tool_name=McpToolName.SEARCH_ATTRACTIONS,
+            args={"city": request.destination, "preferences": request.preferences},
+            purpose="Find optional attractions to fill time beyond must-visit places.",
+            stage=McpQueryStage.PREPLAN,
+        ),
+        McpQuery(
+            tool_name=McpToolName.SEARCH_ACCOMMODATION_AREAS,
+            args={
+                "city": request.destination,
+                "budget_level": request.budget_level.value,
+                "prefer_family_room": request.accommodation.prefer_family_room if request.accommodation else False,
+            },
+            purpose="Find suitable accommodation areas before planning daily routes.",
+            stage=McpQueryStage.PREPLAN,
+        ),
+    ]
+
+    for current_date in _date_range(request.start_date, request.end_date):
+        queries.append(
+            McpQuery(
+                tool_name=McpToolName.GET_WEATHER,
+                args={"city": request.destination, "date": current_date.isoformat()},
+                purpose="Check daily weather before assigning outdoor places.",
+                stage=McpQueryStage.PREPLAN,
+            )
+        )
+
+    for place in request.must_visit:
+        queries.append(
+            McpQuery(
+                tool_name=McpToolName.GET_ATTRACTION_DETAIL,
+                args={"name": place, "date": request.start_date.isoformat()},
+                purpose="Check basic details for must-visit places before planning.",
+                stage=McpQueryStage.PREPLAN,
+            )
+        )
+
+    output = PreplanQueryPlannerOutput(query_plan=McpQueryPlan(queries=queries))
+    return {**state, "pending_mcp_queries": output.query_plan}
+
+
 def initial_plan_node(state: TripState) -> TripState:
     """Create a simple initial plan. Replace this with an LLM planner later."""
-    agent_input = RoutePlannerInput(request=state["user_request"])
+    agent_input = RoutePlannerInput(
+        request=state["user_request"],
+        mcp_results=state.get("mcp_results", McpResults()),
+    )
     request = agent_input.request
+    mcp_results = agent_input.mcp_results
     days = _date_range(request.start_date, request.end_date)
     plan_days: list[PlanDay] = []
+    must_visit_day = _choose_must_visit_day(request, mcp_results, days)
+    accommodation_area = _preferred_accommodation_area(mcp_results, request.destination)
 
     for index, current_date in enumerate(days, start=1):
         must_visit_name = request.must_visit[0] if request.must_visit else f"{request.destination} Museum"
-        first_place = must_visit_name if index == 1 else f"{request.destination} Old Street"
+        if index == must_visit_day:
+            first_place = must_visit_name
+        else:
+            first_place = _select_candidate_attraction(
+                mcp_results=mcp_results,
+                city=request.destination,
+                prefer_indoor=_is_heavy_rain(mcp_results, request.destination, current_date),
+                excluded={must_visit_name},
+                fallback=f"{request.destination} Old Street",
+            )
+        first_category = _category_for_place(first_place, mcp_results, PlaceCategory.OUTDOOR)
         visits = [
             VisitSlot(
                 sequence=1,
                 place_name=first_place,
                 city=request.destination,
-                category=PlaceCategory.OUTDOOR if index == 1 else PlaceCategory.CULTURE,
+                category=first_category,
                 start_time=time(9, 0),
                 end_time=time(11, 30),
                 visit_duration_minutes=150,
@@ -118,7 +199,7 @@ def initial_plan_node(state: TripState) -> TripState:
                 date=current_date,
                 city=request.destination,
                 visits=visits,
-                accommodation_area=f"{request.destination} city center",
+                accommodation_area=accommodation_area,
                 total_visit_minutes=sum(visit.visit_duration_minutes for visit in visits),
                 total_transport_minutes=sum(
                     visit.transport_to_next.estimated_duration_minutes
@@ -152,53 +233,67 @@ def initial_plan_node(state: TripState) -> TripState:
     return {**state, "current_plan": output.plan}
 
 
-def collect_mcp_data_node(state: TripState) -> TripState:
-    """Collect mock external data for the current plan."""
-    agent_input = DataCollectorInput(plan=state["current_plan"])
+def plan_check_query_planner_node(state: TripState) -> TripState:
+    """Plan MCP queries needed to validate the current structured itinerary."""
+    agent_input = PlanCheckQueryPlannerInput(plan=state["current_plan"])
     plan = agent_input.plan
-    weather: list[WeatherResult] = []
-    attractions: list[AttractionResult] = []
-    routes: list[RouteResult] = []
+    queries: list[McpQuery] = []
 
     for day in plan.days:
-        weather.append(
-            WeatherResult(
-                city=day.city,
-                date=day.date,
-                condition="heavy rain" if day.day == 1 else "cloudy",
-                warning="Outdoor plans may be affected." if day.day == 1 else None,
+        queries.append(
+            McpQuery(
+                tool_name=McpToolName.GET_WEATHER,
+                args={"city": day.city, "date": day.date.isoformat()},
+                purpose="Verify weather for the planned day.",
+                stage=McpQueryStage.PLAN_CHECK,
             )
         )
-
         for visit in day.visits:
-            attractions.append(
-                AttractionResult(
-                    name=visit.place_name,
-                    city=visit.city,
-                    category=visit.category,
-                    is_open=not (visit.place_name.endswith("Museum") and day.day == 2),
-                    opening_hours="Closed" if visit.place_name.endswith("Museum") and day.day == 2 else "09:00-18:00",
-                    ticket_price=visit.estimated_cost,
-                    recommended_duration_minutes=120,
+            queries.append(
+                McpQuery(
+                    tool_name=McpToolName.GET_ATTRACTION_DETAIL,
+                    args={"name": visit.place_name, "date": day.date.isoformat()},
+                    purpose="Verify attraction status for the planned date.",
+                    stage=McpQueryStage.PLAN_CHECK,
                 )
             )
-
         for origin, destination in zip(day.visits, day.visits[1:]):
-            long_first_day_route = day.day == 1 and (
-                origin.place_name == "West Lake" or destination.place_name == "West Lake"
-            )
-            routes.append(
-                RouteResult(
-                    origin=origin.place_name,
-                    destination=destination.place_name,
-                    mode=TransportMode.TAXI,
-                    duration_minutes=150 if long_first_day_route else 35,
-                    distance_km=40 if long_first_day_route else 8,
+            mode = origin.transport_to_next.mode.value if origin.transport_to_next else TransportMode.TAXI.value
+            queries.append(
+                McpQuery(
+                    tool_name=McpToolName.GET_ROUTE_TIME,
+                    args={
+                        "origin": origin.place_name,
+                        "destination": destination.place_name,
+                        "mode": mode,
+                    },
+                    purpose="Verify transfer duration between consecutive planned places.",
+                    stage=McpQueryStage.PLAN_CHECK,
                 )
             )
 
-    output = DataCollectorOutput(mcp_results=McpResults(weather=weather, attractions=attractions, routes=routes))
-    return {**state, "mcp_results": output.mcp_results}
+    output = PlanCheckQueryPlannerOutput(query_plan=McpQueryPlan(queries=queries))
+    return {**state, "pending_mcp_queries": output.query_plan}
+
+
+def collect_mcp_data_node(state: TripState) -> TripState:
+    """Execute pending MCP queries and merge their results into state."""
+    agent_input = DataCollectorInput(
+        query_plan=state.get("pending_mcp_queries", McpQueryPlan()),
+        existing_results=state.get("mcp_results", McpResults()),
+        default_city=state["user_request"].destination,
+    )
+    collected = McpResults()
+
+    for query in agent_input.query_plan.queries:
+        collected = _merge_mcp_results(
+            collected,
+            _execute_mock_mcp_query(query, default_city=agent_input.default_city),
+        )
+
+    merged_results = _merge_mcp_results(agent_input.existing_results, collected)
+    output = DataCollectorOutput(mcp_results=merged_results)
+    return {**state, "mcp_results": output.mcp_results, "pending_mcp_queries": McpQueryPlan()}
 
 
 def validate_plan_node(state: TripState) -> TripState:
@@ -228,11 +323,22 @@ def validate_plan_node(state: TripState) -> TripState:
 
     weather_by_date = {(item.city, item.date): item for item in mcp_results.weather}
     attraction_by_name = {item.name: item for item in mcp_results.attractions}
+    attraction_by_name_date = {
+        (item.name, item.date): item
+        for item in mcp_results.attractions
+        if item.date is not None
+    }
+    route_by_key = {
+        (item.origin, item.destination, item.mode): item
+        for item in mcp_results.routes
+    }
 
     for day in plan.days:
         day_weather = weather_by_date.get((day.city, day.date))
         for visit in day.visits:
-            attraction = attraction_by_name.get(visit.place_name)
+            attraction = attraction_by_name_date.get((visit.place_name, day.date)) or attraction_by_name.get(
+                visit.place_name
+            )
             if attraction and not attraction.is_open:
                 issues.append(
                     ValidationIssue(
@@ -257,18 +363,21 @@ def validate_plan_node(state: TripState) -> TripState:
                         suggested_action="Swap this outdoor visit with an indoor visit on another day.",
                     )
                 )
-
-    for route in mcp_results.routes:
-        if route.duration_minutes > 90:
-            issues.append(
-                ValidationIssue(
-                    issue_type=IssueType.ROUTE_TOO_LONG,
-                    severity=Severity.HIGH,
-                    locations=[route.origin, route.destination],
-                    reason=f"Travel time is {route.duration_minutes} minutes.",
-                    suggested_action="Reorder nearby places or split them across different days.",
+        for origin, destination in zip(day.visits, day.visits[1:]):
+            mode = origin.transport_to_next.mode if origin.transport_to_next else TransportMode.TAXI
+            route = route_by_key.get((origin.place_name, destination.place_name, mode))
+            if route and route.duration_minutes > 90:
+                issues.append(
+                    ValidationIssue(
+                        issue_type=IssueType.ROUTE_TOO_LONG,
+                        severity=Severity.HIGH,
+                        day=day.day,
+                        date=day.date,
+                        locations=[route.origin, route.destination],
+                        reason=f"Travel time is {route.duration_minutes} minutes.",
+                        suggested_action="Reorder nearby places or split them across different days.",
+                    )
                 )
-            )
 
     output = ValidatorOutput(issues=issues)
     return {**state, "issues": output.issues}
@@ -294,14 +403,21 @@ def replan_node(state: TripState) -> TripState:
         if issue.issue_type == IssueType.BAD_WEATHER
         for location in issue.locations
     }
-    closed_locations = {
-        location
+    closed_occurrences = {
+        (issue.day, location)
         for issue in agent_input.issues
         if issue.issue_type == IssueType.ATTRACTION_CLOSED
         for location in issue.locations
     }
+    long_route_occurrences = {
+        (issue.day, location)
+        for issue in agent_input.issues
+        if issue.issue_type == IssueType.ROUTE_TOO_LONG
+        for location in issue.locations
+    }
 
     for day in next_plan.days:
+        day_changed = False
         for visit in day.visits:
             if (
                 IssueType.BAD_WEATHER in issue_types
@@ -312,13 +428,29 @@ def replan_node(state: TripState) -> TripState:
                 visit.place_name = f"{day.city} Art Gallery"
                 visit.category = PlaceCategory.INDOOR
                 visit.notes = "Replanned from outdoor visit because of mock heavy rain."
-            if visit.place_name in closed_locations:
+                day_changed = True
+            if (day.day, visit.place_name) in closed_occurrences:
                 visit.place_name = f"{day.city} Tea House"
                 visit.category = PlaceCategory.FOOD
                 visit.notes = "Replanned from a closed attraction."
-            if IssueType.ROUTE_TOO_LONG in issue_types and day.day == 1 and visit.transport_to_next:
+                day_changed = True
+            if (
+                IssueType.ROUTE_TOO_LONG in issue_types
+                and visit.transport_to_next
+                and (
+                    (day.day, visit.place_name) in long_route_occurrences
+                    or (day.day, visit.transport_to_next.destination) in long_route_occurrences
+                )
+            ):
                 visit.transport_to_next.mode = TransportMode.TRANSIT
-        day.daily_notes = "This day was adjusted by the mock replanner." if day.day == 1 else day.daily_notes
+                day_changed = True
+            if (day.day, visit.place_name) in long_route_occurrences and visit.place_name not in request.must_visit:
+                visit.place_name = f"{day.city} Tea House"
+                visit.category = PlaceCategory.FOOD
+                visit.notes = "Replanned from a long transfer."
+                day_changed = True
+        if day_changed:
+            day.daily_notes = "This day was adjusted by the mock replanner."
 
     planned_places = {visit.place_name for day in next_plan.days for visit in day.visits}
     for required_place in request.must_visit:
@@ -330,6 +462,7 @@ def replan_node(state: TripState) -> TripState:
                 target_day.visits[0].notes = "Moved here to avoid mock heavy rain on the first day."
 
     next_plan.assumptions = [*next_plan.assumptions, "One mock replanning pass was applied."]
+    _sync_transfer_names(next_plan)
     _recalculate_plan_totals(next_plan)
     output = ReplannerOutput(plan=next_plan, addressed_issues=agent_input.issues)
     return {
@@ -376,6 +509,189 @@ def _date_range(start: date, end: date) -> list[date]:
         raise ValueError("end_date must be on or after start_date")
     days = (end - start).days + 1
     return [start + timedelta(days=offset) for offset in range(days)]
+
+
+def _execute_mock_mcp_query(query: McpQuery, default_city: str) -> McpResults:
+    args = query.args
+    if query.tool_name == McpToolName.GET_WEATHER:
+        raw = mock_get_weather(city=str(args["city"]), date=str(args["date"]))
+        return McpResults(
+            weather=[
+                WeatherResult(
+                    city=str(raw["city"]),
+                    date=_parse_date(str(raw["date"])),
+                    condition=str(raw["condition"]),
+                    warning=raw.get("warning"),
+                )
+            ]
+        )
+
+    if query.tool_name == McpToolName.SEARCH_ATTRACTIONS:
+        raw_results = mock_search_attractions(
+            city=str(args["city"]),
+            preferences=list(args.get("preferences", [])),
+        )
+        return McpResults(
+            attractions=[
+                AttractionResult(
+                    name=str(item["name"]),
+                    city=str(item.get("city", args["city"])),
+                    category=PlaceCategory(str(item["category"])),
+                    notes=str(item.get("match_reason", "")),
+                )
+                for item in raw_results
+            ]
+        )
+
+    if query.tool_name == McpToolName.GET_ATTRACTION_DETAIL:
+        query_date = _parse_date(str(args["date"]))
+        raw = mock_get_attraction_detail(name=str(args["name"]), date=query_date.isoformat())
+        return McpResults(
+            attractions=[
+                AttractionResult(
+                    name=str(raw["name"]),
+                    city=str(raw.get("city", default_city)),
+                    category=PlaceCategory(str(raw["category"])),
+                    date=query_date,
+                    is_open=bool(raw["is_open"]),
+                    opening_hours=str(raw["opening_hours"]),
+                    ticket_price=float(raw["ticket_price"]),
+                    recommended_duration_minutes=int(raw["recommended_duration_minutes"]),
+                    notes=str(raw.get("notes", "")),
+                )
+            ]
+        )
+
+    if query.tool_name == McpToolName.GET_ROUTE_TIME:
+        raw = mock_get_route_time(
+            origin=str(args["origin"]),
+            destination=str(args["destination"]),
+            mode=str(args.get("mode", TransportMode.TAXI.value)),
+        )
+        return McpResults(
+            routes=[
+                RouteResult(
+                    origin=str(raw["origin"]),
+                    destination=str(raw["destination"]),
+                    mode=TransportMode(str(raw["mode"])),
+                    duration_minutes=int(raw["duration_minutes"]),
+                    distance_km=float(raw["distance_km"]),
+                )
+            ]
+        )
+
+    if query.tool_name == McpToolName.SEARCH_ACCOMMODATION_AREAS:
+        raw_results = mock_search_accommodation_areas(
+            city=str(args["city"]),
+            budget_level=str(args.get("budget_level", BudgetLevel.MEDIUM.value)),
+            prefer_family_room=bool(args.get("prefer_family_room", False)),
+        )
+        return McpResults(
+            accommodation_areas=[
+                AccommodationAreaResult(
+                    area_name=str(item["area_name"]),
+                    city=str(item["city"]),
+                    pros=list(item.get("pros", [])),
+                    cons=list(item.get("cons", [])),
+                    suitable_for=list(item.get("suitable_for", [])),
+                    estimated_price_level=BudgetLevel(str(item.get("estimated_price_level", BudgetLevel.MEDIUM.value))),
+                    notes=str(item.get("notes", "")),
+                )
+                for item in raw_results
+            ]
+        )
+
+    raise ValueError(f"Unsupported MCP tool: {query.tool_name}")
+
+
+def _merge_mcp_results(existing: McpResults, incoming: McpResults) -> McpResults:
+    weather = {(item.city, item.date): item for item in existing.weather}
+    weather.update({(item.city, item.date): item for item in incoming.weather})
+
+    attractions = {(item.name, item.city, item.date): item for item in existing.attractions}
+    attractions.update({(item.name, item.city, item.date): item for item in incoming.attractions})
+
+    routes = {(item.origin, item.destination, item.mode): item for item in existing.routes}
+    routes.update({(item.origin, item.destination, item.mode): item for item in incoming.routes})
+
+    accommodation_areas = {
+        (item.area_name, item.city): item
+        for item in existing.accommodation_areas
+    }
+    accommodation_areas.update(
+        {
+            (item.area_name, item.city): item
+            for item in incoming.accommodation_areas
+        }
+    )
+
+    return McpResults(
+        weather=list(weather.values()),
+        attractions=list(attractions.values()),
+        routes=list(routes.values()),
+        accommodation_areas=list(accommodation_areas.values()),
+    )
+
+
+def _choose_must_visit_day(request: TripRequest, mcp_results: McpResults, days: list[date]) -> int:
+    if not request.must_visit:
+        return 1
+    for index, current_date in enumerate(days, start=1):
+        if not _is_heavy_rain(mcp_results, request.destination, current_date):
+            return index
+    return 1
+
+
+def _is_heavy_rain(mcp_results: McpResults, city: str, current_date: date) -> bool:
+    return any(
+        item.city == city and item.date == current_date and item.condition == "heavy rain"
+        for item in mcp_results.weather
+    )
+
+
+def _select_candidate_attraction(
+    mcp_results: McpResults,
+    city: str,
+    prefer_indoor: bool,
+    excluded: set[str],
+    fallback: str,
+) -> str:
+    candidates = [
+        item
+        for item in mcp_results.attractions
+        if item.city == city and item.name not in excluded
+    ]
+    if prefer_indoor:
+        indoor = next((item for item in candidates if item.category == PlaceCategory.INDOOR), None)
+        if indoor:
+            return indoor.name
+    if candidates:
+        return candidates[0].name
+    return fallback
+
+
+def _category_for_place(place_name: str, mcp_results: McpResults, fallback: PlaceCategory) -> PlaceCategory:
+    for attraction in mcp_results.attractions:
+        if attraction.name == place_name:
+            return attraction.category
+    return fallback
+
+
+def _preferred_accommodation_area(mcp_results: McpResults, city: str) -> str:
+    for area in mcp_results.accommodation_areas:
+        if area.city == city:
+            return area.area_name
+    return f"{city} city center"
+
+
+def _sync_transfer_names(plan: TripPlan) -> None:
+    for day in plan.days:
+        for origin, destination in zip(day.visits, day.visits[1:]):
+            if origin.transport_to_next:
+                origin.transport_to_next.origin = origin.place_name
+                origin.transport_to_next.destination = destination.place_name
+        if day.visits:
+            day.visits[-1].transport_to_next = None
 
 
 def _recalculate_plan_totals(plan: TripPlan) -> None:
