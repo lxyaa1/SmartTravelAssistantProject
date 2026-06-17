@@ -1,0 +1,1 @@
+"""Mock travel MCP server."""

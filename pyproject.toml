@@ -1,0 +1,16 @@
+[project]
+name = "travel-agent"
+version = "0.1.0"
+description = "Local travel assistant skeleton using LangGraph, LangChain, and MCP."
+requires-python = ">=3.11"
+dependencies = [
+    "langchain>=0.3",
+    "langgraph>=0.2",
+    "langchain-mcp-adapters>=0.1",
+    "mcp>=1.0",
+    "pydantic>=2",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
