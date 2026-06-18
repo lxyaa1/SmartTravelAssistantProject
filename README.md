@@ -9,13 +9,19 @@ This is intentionally a minimal runnable skeleton:
 - Pydantic schemas for user requests, trip plans, MCP results, and validation issues.
 - Structured traveler and accommodation requirements, including children who count as travelers but do not need separate beds.
 - LangGraph workflow with pre-plan MCP queries, plan-check MCP queries, validation, and replanning.
-- Mock MCP stdio server scaffold plus optional Bailian official Amap Maps MCP backend.
-- No login, database, or UI yet.
+- Mock MCP stdio server scaffold plus optional Amap Maps MCP backend.
+- Local Streamlit UI with no login, database, or registration.
 
 ## Run
 
 ```powershell
 python -m app.main
+```
+
+For the local UI:
+
+```powershell
+python -m streamlit run app/streamlit_app.py --server.port 8502
 ```
 
 ## LLM Configuration
@@ -49,16 +55,46 @@ Current LLM-backed nodes:
 
 The query planners, MCP data collection, validation routing, and final markdown rendering remain deterministic Python nodes.
 
+In the Streamlit UI, the `LLM` checkbox only controls the two planning nodes:
+
+```text
+initial_plan
+replan
+```
+
+When unchecked, these nodes use deterministic Python logic. When checked, they call DashScope/Qwen and still must return the same `TripPlan` Pydantic schema.
+
+The Streamlit UI streams workflow node updates while a plan is running and writes action logs to:
+
+```text
+data/logs/*.jsonl
+```
+
 ## MCP Backend Configuration
 
-The project can call Bailian's official Amap Maps MCP server through Streamable HTTP. It uses the same `DASHSCOPE_API_KEY` environment variable.
+The recommended live map backend is Amap's official MCP endpoint. It uses an Amap Web service key:
+
+```powershell
+$env:Amap_Key="your-amap-web-service-key"
+$env:TRAVEL_AGENT_MCP_BACKEND="amap"
+$env:TRAVEL_AGENT_AMAP_PROVIDER="official"
+```
+
+The official Amap MCP endpoint is:
+
+```text
+https://mcp.amap.com/mcp?key=...
+```
+
+The project can also call Bailian's Amap Maps MCP endpoint through Streamable HTTP. It uses the same `DASHSCOPE_API_KEY` environment variable.
 
 ```powershell
 $env:DASHSCOPE_API_KEY="your-api-key"
 $env:TRAVEL_AGENT_MCP_BACKEND="amap"
+$env:TRAVEL_AGENT_AMAP_PROVIDER="bailian"
 ```
 
-The Amap MCP endpoint is:
+The Bailian Amap MCP endpoint is:
 
 ```text
 https://dashscope.aliyuncs.com/api/v1/mcps/amap-maps/mcp
@@ -91,6 +127,29 @@ If Amap MCP fails, the workflow records the error in `mcp_errors` and falls back
 
 ```powershell
 $env:TRAVEL_AGENT_MCP_BACKEND="mock"
+```
+
+For a minimal connectivity check:
+
+```powershell
+$env:Amap_Key="your-amap-web-service-key"
+python scripts/check_amap_mcp.py --provider official
+python scripts/check_amap_mcp.py --provider official --call-weather --city 杭州
+```
+
+The official Amap MCP endpoint is `https://mcp.amap.com/mcp?key=...`. The first command only lists tools. The second command also calls `maps_weather`, which helps separate connection problems from Amap tool authorization problems.
+
+To keep testing Bailian's Amap MCP endpoint:
+
+```powershell
+$env:DASHSCOPE_API_KEY="your-dashscope-api-key"
+python scripts/check_amap_mcp.py --provider bailian --call-weather --city 杭州
+```
+
+For a reference-style connectivity check matching `travel-agent-main/mcp_client.py`:
+
+```powershell
+python scripts/check_amap_mcp_like_reference.py
 ```
 
 ## Traveler Input

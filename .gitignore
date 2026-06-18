@@ -7,3 +7,4 @@ venv/
 *.pyo
 *.pyd
 data/cache/
+data/logs/

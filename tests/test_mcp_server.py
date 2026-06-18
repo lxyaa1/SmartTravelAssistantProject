@@ -8,7 +8,7 @@ import pytest
 from langchain_core.tools import ToolException
 
 from backend.mcp.amap import _extract_pois
-from backend.mcp.client import load_amap_tools, load_mock_tools
+from backend.mcp.client import get_amap_api_key, get_bailian_api_key, load_amap_tools, load_mock_tools
 from backend.mcp.tool_registry import AMAP_MAPS_TOOLS, MOCK_TRAVEL_TOOLS
 from mcp_servers.mock_travel_server.server import (
     get_attraction_detail,
@@ -31,13 +31,26 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-def _require_live_amap_tests() -> str:
-    api_key = os.getenv("DASHSCOPE_API_KEY")
-    if not api_key:
-        pytest.skip("DASHSCOPE_API_KEY is not set")
+def _require_live_amap_tests() -> tuple[str, str]:
     if os.getenv("RUN_AMAP_MCP_LIVE_TESTS") != "1":
         pytest.skip("set RUN_AMAP_MCP_LIVE_TESTS=1 to call live Amap MCP tools")
-    return api_key
+
+    provider = os.getenv("TRAVEL_AGENT_AMAP_PROVIDER", "auto").strip().lower()
+    amap_key = get_amap_api_key()
+    dashscope_key = get_bailian_api_key()
+    if provider in {"official", "amap_official"}:
+        if not amap_key:
+            pytest.skip("Amap_Key, AMAP_KEY, or AMAP_MAPS_API_KEY is not set")
+        return "official", amap_key
+    if provider in {"bailian", "dashscope", "amap_bailian"}:
+        if not dashscope_key:
+            pytest.skip("DASHSCOPE_API_KEY is not set")
+        return "bailian", dashscope_key
+    if amap_key:
+        return "official", amap_key
+    if dashscope_key:
+        return "bailian", dashscope_key
+    pytest.skip("no Amap MCP key is set")
 
 
 def _assert_tool_output(tool_name: str, result: Any) -> None:
@@ -103,24 +116,24 @@ def test_mock_search_accommodation_areas_returns_area_options() -> None:
 
 
 def test_amap_mcp_discovers_all_official_tools() -> None:
-    api_key = _require_live_amap_tests()
-    tools = _run(load_amap_tools(api_key))
+    provider, api_key = _require_live_amap_tests()
+    tools = _run(load_amap_tools(api_key=api_key, provider=provider))
     tool_names = {tool.name for tool in tools}
 
     assert set(AMAP_MAPS_TOOLS.tool_names) == tool_names
 
 
 def test_amap_mcp_all_tools_accept_inputs_and_return_outputs() -> None:
-    api_key = _require_live_amap_tests()
-    results = _run(_call_all_amap_tools(api_key))
+    provider, api_key = _require_live_amap_tests()
+    results = _run(_call_all_amap_tools(provider, api_key))
 
     assert set(AMAP_MAPS_TOOLS.tool_names) == set(results)
     for tool_name, result in results.items():
         _assert_tool_output(tool_name, result)
 
 
-async def _call_all_amap_tools(api_key: str) -> dict[str, Any]:
-    tools = {tool.name: tool for tool in await load_amap_tools(api_key)}
+async def _call_all_amap_tools(provider: str, api_key: str) -> dict[str, Any]:
+    tools = {tool.name: tool for tool in await load_amap_tools(api_key=api_key, provider=provider)}
     missing = set(AMAP_MAPS_TOOLS.tool_names) - set(tools)
     assert not missing, f"missing Amap tools: {sorted(missing)}"
 

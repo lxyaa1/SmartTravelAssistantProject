@@ -199,6 +199,9 @@ class PlanDay(BaseModel):
     city: str
     visits: list[VisitSlot] = Field(default_factory=list)
     accommodation_area: str | None = None
+    arrival_transfer: TransferLeg | None = None
+    start_transfer_to_first: TransferLeg | None = None
+    return_transfer_to_accommodation: TransferLeg | None = None
     total_visit_minutes: int = Field(default=0, ge=0)
     total_transport_minutes: int = Field(default=0, ge=0)
     estimated_cost: float = Field(default=0, ge=0)
