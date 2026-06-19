@@ -65,21 +65,23 @@ def generate_initial_plan_with_llm(
             "Do not include markdown or explanatory text.",
             "Populate route_segments from the city_route_plan and include an explicit return segment.",
             "Populate accommodations with concrete hotel or lodging candidates near each stay's lodging_anchor.",
-            "Each day must include schedule_blocks that cover the main 24-hour timeline: sleep, meals, transfers, visits, rest, and check-in/check-out where relevant.",
-            "A schedule block must never cross midnight because the schema only has time fields. Split sleep into 00:00-07:30 and 22:30-23:59 instead of writing 22:30-07:30.",
-            "Every schedule block must have end_time later than start_time on the same day.",
-            "Every day must contain visits ordered by sequence.",
+            "Each day must include timeline items that cover the main 24-hour day: sleep, meals, moves, visits, rest, and check-in/check-out where relevant.",
+            "A timeline item is exactly one primitive: item_type=move with move populated and stay null, or item_type=stay with stay populated and move null.",
+            "For stay items, stay.purpose must be one of the stay_purpose allowed values only. Put shopping/outdoor/indoor/food/culture in stay.category, not stay.purpose.",
+            "A timeline item must never cross midnight because the schema only has time fields. Split sleep into 00:00-07:30 and 22:30-23:59 instead of writing 22:30-07:30.",
+            "Every timeline item must have end_time later than start_time on the same day.",
+            "Timeline item sequence values must be unique and ordered by time, and timeline items must not overlap.",
             "Use candidate attractions, weather, and accommodation areas from MCP results.",
             "Must-visit places must be included unless impossible.",
             "If a day has heavy rain, prefer indoor attractions for that date.",
             "If children or infants are present, keep the schedule relaxed and avoid late activities.",
             "Use MCP lodging results near anchor places before generic accommodation areas.",
-            "For day 1, include arrival_transfer from request.origin to request.destination when they differ.",
-            "For the last day, include departure_transfer back to request.origin when origin and destination differ.",
-            "For every day with accommodation_area and visits, include start_transfer_to_first and return_transfer_to_accommodation.",
+            "For day 1, include a move item with purpose=outbound from request.origin to the first stay city when they differ.",
+            "For the last day, include a move item with purpose=return back to request.origin when origin and destination differ.",
+            "For local transportation, use move items between lodging and attractions and between attractions.",
             "Do not invent optimistic route durations; use MCP route results when available and otherwise choose conservative estimates.",
             "Do not use province-level endpoints when a concrete city or attraction anchor is available.",
-            "Set transport_to_next to null for the last visit of each day.",
+            "Do not invent train or flight numbers; leave train_or_flight_number empty unless present in input.",
         ],
         "allowed_values": _allowed_values(),
         "request": request.model_dump(mode="json"),
@@ -110,13 +112,15 @@ def replan_with_llm(
             "Preserve must-visit places unless an issue makes them impossible.",
             "Prefer swapping dates, reordering nearby places, or replacing non-must-visit places.",
             "Use MCP results and validation issues as the source of truth.",
-            "Preserve and correct route_segments, accommodations, schedule_blocks, arrival_transfer, departure_transfer, start_transfer_to_first, return_transfer_to_accommodation, and transport_to_next.",
-            "A schedule block must never cross midnight because the schema only has time fields. Split sleep into 00:00-07:30 and 22:30-23:59 instead of writing 22:30-07:30.",
-            "Every schedule block must have end_time later than start_time on the same day.",
+            "Preserve and correct route_segments, accommodations, and each day's move/stay timeline.",
+            "A timeline item is exactly one primitive: item_type=move with move populated and stay null, or item_type=stay with stay populated and move null.",
+            "For stay items, stay.purpose must be one of the stay_purpose allowed values only. Put shopping/outdoor/indoor/food/culture in stay.category, not stay.purpose.",
+            "A timeline item must never cross midnight because the schema only has time fields. Split sleep into 00:00-07:30 and 22:30-23:59 instead of writing 22:30-07:30.",
+            "Every timeline item must have end_time later than start_time on the same day.",
+            "Timeline item sequence values must be unique and ordered by time, and timeline items must not overlap.",
             "Do not leave impossible 30-40 minute transfers when validation reports a much longer MCP route.",
             "If lodging is too far from attractions, choose a lodging result nearer to the affected anchor place.",
-            "If a return transfer is missing, add it explicitly.",
-            "Set transport_to_next to null for the last visit of each day.",
+            "If a return move is missing, add a timeline item with move.purpose=return explicitly.",
         ],
         "allowed_values": _allowed_values(),
         "request": request.model_dump(mode="json"),
@@ -199,50 +203,197 @@ def _repair_trip_plan_payload(payload: dict[str, Any]) -> dict[str, Any]:
     for day in days:
         if not isinstance(day, dict):
             continue
-        blocks = day.get("schedule_blocks")
-        if not isinstance(blocks, list):
+        timeline = day.get("timeline")
+        if not isinstance(timeline, list):
             continue
-        day["schedule_blocks"] = _repair_schedule_blocks(blocks)
+        day["timeline"] = _repair_timeline_items(timeline)
     return repaired
 
 
-def _repair_schedule_blocks(blocks: list[Any]) -> list[dict[str, Any]]:
-    repaired_blocks: list[dict[str, Any]] = []
-    for raw_block in blocks:
-        if not isinstance(raw_block, dict):
+def _repair_timeline_items(items: list[Any]) -> list[dict[str, Any]]:
+    repaired_items: list[dict[str, Any]] = []
+    for raw_item in items:
+        if not isinstance(raw_item, dict):
             continue
-        block = deepcopy(raw_block)
-        start_minutes = _time_to_minutes(block.get("start_time"))
-        end_minutes = _time_to_minutes(block.get("end_time"))
+        item = deepcopy(raw_item)
+        _normalize_timeline_item(item)
+        start_minutes = _time_to_minutes(item.get("start_time"))
+        end_minutes = _time_to_minutes(item.get("end_time"))
         if start_minutes is None or end_minutes is None:
-            repaired_blocks.append(block)
+            repaired_items.append(item)
             continue
         if end_minutes > start_minutes:
-            repaired_blocks.append(block)
+            repaired_items.append(item)
             continue
 
-        if str(block.get("block_type", "")).lower() == "sleep" and end_minutes > 0:
-            morning = deepcopy(block)
+        stay = item.get("stay") if isinstance(item.get("stay"), dict) else {}
+        if str(stay.get("purpose", "")).lower() == "sleep" and end_minutes > 0:
+            morning = deepcopy(item)
             morning["start_time"] = "00:00"
             morning["end_time"] = _minutes_to_time(end_minutes)
-            repaired_blocks.append(morning)
+            repaired_items.append(morning)
 
-            night = deepcopy(block)
+            night = deepcopy(item)
             night["start_time"] = _minutes_to_time(start_minutes)
             night["end_time"] = "23:59"
-            repaired_blocks.append(night)
+            repaired_items.append(night)
             continue
 
-        block["end_time"] = _minutes_to_time(min(23 * 60 + 59, start_minutes + 15))
-        if _time_to_minutes(block["end_time"]) <= start_minutes:
-            block["start_time"] = _minutes_to_time(max(0, start_minutes - 15))
-            block["end_time"] = _minutes_to_time(start_minutes)
-        repaired_blocks.append(block)
+        item["end_time"] = _minutes_to_time(min(23 * 60 + 59, start_minutes + 15))
+        if _time_to_minutes(item["end_time"]) <= start_minutes:
+            item["start_time"] = _minutes_to_time(max(0, start_minutes - 15))
+            item["end_time"] = _minutes_to_time(start_minutes)
+        repaired_items.append(item)
 
-    repaired_blocks.sort(key=lambda item: (_time_to_minutes(item.get("start_time")) or 0, int(item.get("sequence", 0) or 0)))
-    for index, block in enumerate(repaired_blocks, start=1):
-        block["sequence"] = index
-    return repaired_blocks
+    repaired_items = _repair_timeline_overlaps(repaired_items)
+    for index, item in enumerate(repaired_items, start=1):
+        item["sequence"] = index
+    return repaired_items
+
+
+def _normalize_timeline_item(item: dict[str, Any]) -> None:
+    stay = item.get("stay") if isinstance(item.get("stay"), dict) else None
+    move = item.get("move") if isinstance(item.get("move"), dict) else None
+    item_type = _normalize_token(item.get("item_type"))
+
+    if stay is not None and (item_type != "move" or move is None):
+        item["item_type"] = "stay"
+        item["move"] = None
+        _normalize_stay_detail(stay)
+        return
+
+    if move is not None:
+        item["item_type"] = "move"
+        item["stay"] = None
+        _normalize_move_detail(move)
+        return
+
+    if item_type not in {"stay", "move"}:
+        item["item_type"] = "stay"
+
+
+def _normalize_stay_detail(stay: dict[str, Any]) -> None:
+    purpose = _normalize_token(stay.get("purpose"))
+    category = _normalize_token(stay.get("category"))
+
+    purpose_map = {
+        "breakfast": "meal",
+        "lunch": "meal",
+        "dinner": "meal",
+        "food": "meal",
+        "restaurant": "meal",
+        "dining": "meal",
+        "shopping": "visit",
+        "shop": "visit",
+        "mall": "visit",
+        "culture": "visit",
+        "cultural": "visit",
+        "sightseeing": "visit",
+        "attraction": "visit",
+        "tour": "visit",
+        "temple": "visit",
+        "museum": "visit",
+        "gallery": "visit",
+        "outdoor": "visit",
+        "indoor": "visit",
+        "free_time": "buffer",
+        "freetime": "buffer",
+        "leisure": "buffer",
+        "checkin": "hotel_checkin",
+        "check_in": "hotel_checkin",
+        "hotelcheckin": "hotel_checkin",
+        "checkout": "hotel_checkout",
+        "check_out": "hotel_checkout",
+        "hotelcheckout": "hotel_checkout",
+        "hotel": "rest",
+        "accommodation": "rest",
+        "overnight": "sleep",
+    }
+    category_map = {
+        "shopping": "shopping",
+        "shop": "shopping",
+        "mall": "shopping",
+        "food": "food",
+        "restaurant": "food",
+        "dining": "food",
+        "culture": "culture",
+        "cultural": "culture",
+        "temple": "culture",
+        "museum": "indoor",
+        "gallery": "indoor",
+        "indoor": "indoor",
+        "outdoor": "outdoor",
+    }
+
+    allowed_purposes = {"visit", "sleep", "meal", "rest", "hotel_checkin", "hotel_checkout", "buffer", "other"}
+    if purpose not in allowed_purposes:
+        stay["purpose"] = purpose_map.get(purpose, "other")
+    if category not in {"outdoor", "indoor", "food", "culture", "shopping", "hotel_area", ""}:
+        stay["category"] = category_map.get(category, None)
+    if purpose in category_map and not stay.get("category"):
+        stay["category"] = category_map[purpose]
+
+
+def _normalize_move_detail(move: dict[str, Any]) -> None:
+    purpose = _normalize_token(move.get("purpose"))
+    purpose_map = {
+        "transfer": "local",
+        "transport": "local",
+        "taxi": "local",
+        "walk": "local",
+        "walking": "local",
+        "bus": "local",
+        "metro": "local",
+        "subway": "local",
+        "train": "intercity",
+        "flight": "intercity",
+        "arrival": "outbound",
+        "departure": "return",
+        "back": "return",
+    }
+    if purpose not in {"local", "outbound", "intercity", "return"}:
+        move["purpose"] = purpose_map.get(purpose, "local")
+
+
+def _normalize_token(value: Any) -> str:
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _repair_timeline_overlaps(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    sorted_items = sorted(
+        items,
+        key=lambda item: (_time_to_minutes(item.get("start_time")) or 0, int(item.get("sequence", 0) or 0)),
+    )
+    repaired: list[dict[str, Any]] = []
+    previous_end = 0
+    for item in sorted_items:
+        start_minutes = _time_to_minutes(item.get("start_time"))
+        end_minutes = _time_to_minutes(item.get("end_time"))
+        if start_minutes is None or end_minutes is None:
+            repaired.append(item)
+            continue
+
+        duration = max(15, end_minutes - start_minutes)
+        if start_minutes < previous_end:
+            start_minutes = previous_end
+            end_minutes = start_minutes + duration
+        if end_minutes > 23 * 60 + 59:
+            end_minutes = 23 * 60 + 59
+            start_minutes = min(start_minutes, max(0, end_minutes - duration))
+        if start_minutes < previous_end:
+            start_minutes = previous_end
+        if end_minutes <= start_minutes:
+            if start_minutes >= 23 * 60 + 59:
+                continue
+            end_minutes = min(23 * 60 + 59, start_minutes + 15)
+        if end_minutes <= start_minutes:
+            continue
+
+        item["start_time"] = _minutes_to_time(start_minutes)
+        item["end_time"] = _minutes_to_time(end_minutes)
+        previous_end = end_minutes
+        repaired.append(item)
+    return repaired
 
 
 def _time_to_minutes(value: Any) -> int | None:
@@ -257,7 +408,7 @@ def _time_to_minutes(value: Any) -> int | None:
         minute = int(parts[1])
     except ValueError:
         return None
-    if not 0 <= hour <= 23 or not 0 <= minute <= 59:
+    if hour < 0 or not 0 <= minute <= 59:
         return None
     return hour * 60 + minute
 
@@ -272,17 +423,7 @@ def _allowed_values() -> dict[str, list[str]]:
         "place_category": ["outdoor", "indoor", "food", "culture", "shopping", "hotel_area"],
         "transport_mode": ["walk", "taxi", "transit", "train", "flight"],
         "segment_type": ["outbound", "intercity", "return", "local"],
-        "schedule_block_type": [
-            "sleep",
-            "breakfast",
-            "lunch",
-            "dinner",
-            "rest",
-            "visit",
-            "local_transfer",
-            "intercity_transfer",
-            "hotel_checkin",
-            "hotel_checkout",
-            "free_time",
-        ],
+        "timeline_item_type": ["stay", "move"],
+        "stay_purpose": ["visit", "sleep", "meal", "rest", "hotel_checkin", "hotel_checkout", "buffer", "other"],
+        "move_purpose": ["local", "outbound", "intercity", "return"],
     }

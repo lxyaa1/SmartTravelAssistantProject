@@ -19,6 +19,8 @@ class TripState(TypedDict, total=False):
     use_llm: bool
     mcp_backend: str
     mcp_errors: list[str]
+    mcp_cache: dict[str, McpResults]
+    mcp_cache_stats: dict[str, int]
     user_request: TripRequest
     city_route_plan: CityRoutePlan
     pending_mcp_queries: McpQueryPlan

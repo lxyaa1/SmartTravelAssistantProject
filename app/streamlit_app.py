@@ -17,7 +17,7 @@ from backend.schemas.trip import McpResults, TripPlan, ValidationIssue
 
 st.set_page_config(page_title="TravelAgent", page_icon="T", layout="wide")
 LOG_DIR = Path("data/logs")
-UI_STATE_VERSION = 5
+UI_STATE_VERSION = 6
 
 
 def main() -> None:
@@ -274,66 +274,56 @@ def _render_itinerary(plan: TripPlan) -> None:
         )
     for day in plan.days:
         st.markdown(f"### Day {day.day} - {day.date} - {day.city}")
-        if day.schedule_blocks:
-            st.dataframe(
-                [
-                    {
-                        "\u987a\u5e8f": block.sequence,
-                        "\u65f6\u95f4": f"{block.start_time.strftime('%H:%M')}-{block.end_time.strftime('%H:%M')}",
-                        "\u7c7b\u578b": block.block_type.value,
-                        "\u5185\u5bb9": block.title,
-                        "\u5730\u70b9": block.place_name or "",
-                        "\u4ea4\u901a": (
-                            f"{block.transfer.origin} -> {block.transfer.destination}"
-                            if block.transfer
-                            else ""
-                        ),
-                        "\u4ea4\u901a\u65b9\u5f0f": block.transfer.mode.value if block.transfer else "",
-                        "\u8017\u65f6\u5206\u949f": block.transfer.estimated_duration_minutes if block.transfer else "",
-                        "\u8d39\u7528": block.estimated_cost,
-                        "\u5907\u6ce8": block.notes,
-                    }
-                    for block in day.schedule_blocks
-                ],
-                hide_index=True,
-                use_container_width=True,
-            )
-        rows = []
-        arrival_transfer = getattr(day, "arrival_transfer", None)
-        start_transfer = getattr(day, "start_transfer_to_first", None)
-        return_transfer = getattr(day, "return_transfer_to_accommodation", None)
-        departure_transfer = getattr(day, "departure_transfer", None)
-        if arrival_transfer:
-            rows.append(_transfer_row("\u5230\u8fbe", arrival_transfer))
-        if start_transfer:
-            rows.append(_transfer_row("\u4f4f\u5bbf\u51fa\u53d1", start_transfer))
-        for visit in day.visits:
-            transfer = visit.transport_to_next
-            rows.append(
-                {
-                    "\u987a\u5e8f": visit.sequence,
-                    "\u65f6\u95f4": f"{visit.start_time.strftime('%H:%M')}-{visit.end_time.strftime('%H:%M')}",
-                    "\u5730\u70b9": visit.place_name,
-                    "\u7c7b\u578b": visit.category.value,
-                    "\u6e38\u73a9\u5206\u949f": visit.visit_duration_minutes,
-                    "\u4e0b\u4e00\u7a0b": transfer.destination if transfer else "",
-                    "\u4ea4\u901a": transfer.mode.value if transfer else "",
-                    "\u4ea4\u901a\u5206\u949f": transfer.estimated_duration_minutes if transfer else "",
-                    "\u8d39\u7528": visit.estimated_cost,
-                    "\u5907\u6ce8": visit.notes,
-                }
-            )
-        if return_transfer:
-            rows.append(_transfer_row("\u8fd4\u56de\u4f4f\u5bbf", return_transfer))
-        if departure_transfer:
-            rows.append(_transfer_row("\u8fd4\u7a0b", departure_transfer))
-        if rows:
-            with st.expander("\u8bbf\u95ee\u70b9\u548c\u63a5\u9a73\u660e\u7ec6", expanded=not day.schedule_blocks):
-                st.dataframe(rows, hide_index=True, use_container_width=True)
+        st.dataframe(
+            [_timeline_item_row(day, item) for item in day.timeline],
+            hide_index=True,
+            use_container_width=True,
+        )
         if day.accommodation_area:
             st.caption(f"\u4f4f\u5bbf\u533a\u57df\uff1a{day.accommodation_area}")
         if day.daily_notes:
             st.info(day.daily_notes)
+
+
+def _timeline_item_row(day, item) -> dict[str, Any]:
+    if item.move:
+        return {
+            "\u987a\u5e8f": item.sequence,
+            "\u65f6\u95f4": f"{item.start_time.strftime('%H:%M')}-{item.end_time.strftime('%H:%M')}",
+            "\u7c7b\u578b": "move",
+            "\u76ee\u7684": item.move.purpose.value,
+            "\u5730\u70b9/\u8def\u7ebf": f"{item.move.origin} -> {item.move.destination}",
+            "\u4ea4\u901a": item.move.mode.value,
+            "\u8017\u65f6\u5206\u949f": item.move.duration_minutes or item.duration_minutes,
+            "\u8ddd\u79bbkm": item.move.distance_km,
+            "\u8d39\u7528": item.move.estimated_cost,
+            "\u5907\u6ce8": item.move.notes or item.notes,
+        }
+    if item.stay:
+        return {
+            "\u987a\u5e8f": item.sequence,
+            "\u65f6\u95f4": f"{item.start_time.strftime('%H:%M')}-{item.end_time.strftime('%H:%M')}",
+            "\u7c7b\u578b": "stay",
+            "\u76ee\u7684": item.stay.purpose.value,
+            "\u5730\u70b9/\u8def\u7ebf": item.stay.place_name,
+            "\u4ea4\u901a": "",
+            "\u8017\u65f6\u5206\u949f": item.stay.duration_minutes or item.duration_minutes,
+            "\u8ddd\u79bbkm": "",
+            "\u8d39\u7528": item.stay.estimated_cost,
+            "\u5907\u6ce8": item.stay.notes or item.notes,
+        }
+    return {
+        "\u987a\u5e8f": item.sequence,
+        "\u65f6\u95f4": f"{item.start_time.strftime('%H:%M')}-{item.end_time.strftime('%H:%M')}",
+        "\u7c7b\u578b": item.item_type.value,
+        "\u76ee\u7684": "",
+        "\u5730\u70b9/\u8def\u7ebf": day.city,
+        "\u4ea4\u901a": "",
+        "\u8017\u65f6\u5206\u949f": item.duration_minutes,
+        "\u8ddd\u79bbkm": "",
+        "\u8d39\u7528": "",
+        "\u5907\u6ce8": item.notes,
+    }
 
 
 def _render_issues(issues: list[ValidationIssue]) -> None:
@@ -371,15 +361,20 @@ def _render_mcp_results(mcp_results: McpResults) -> None:
 def _render_plan_snapshot(plan: TripPlan) -> None:
     rows = []
     for day in plan.days:
+        visit_names = [
+            item.stay.place_name
+            for item in day.timeline
+            if item.stay and item.stay.purpose.value == "visit"
+        ]
         rows.append(
             {
                 "\u5929": day.day,
                 "\u65e5\u671f": day.date.isoformat(),
                 "\u57ce\u5e02": day.city,
                 "\u4f4f\u5bbf": day.accommodation_area or "",
-                "\u666f\u70b9": " -> ".join(visit.place_name for visit in day.visits),
-                "\u4ea4\u901a\u5206\u949f": day.total_transport_minutes,
-                "\u7761\u7720\u5206\u949f": getattr(day, "sleep_minutes", 0),
+                "\u666f\u70b9": " -> ".join(visit_names),
+                "\u4ea4\u901a\u5206\u949f": day.total_move_minutes,
+                "\u7761\u7720\u5206\u949f": day.total_sleep_minutes,
                 "\u8d39\u7528": day.estimated_cost,
             }
         )
@@ -405,6 +400,11 @@ def _render_event_log() -> None:
             "issues": event.get("issues"),
             "node_seconds": event.get("node_duration_seconds"),
             "elapsed_seconds": event.get("elapsed_seconds"),
+            "last_cache_hits": event.get("mcp_cache_stats", {}).get("last_hits", 0),
+            "last_cache_misses": event.get("mcp_cache_stats", {}).get("last_misses", 0),
+            "cache_hits": event.get("mcp_cache_stats", {}).get("hits", 0),
+            "cache_misses": event.get("mcp_cache_stats", {}).get("misses", 0),
+            "cache_entries": event.get("mcp_cache_stats", {}).get("entries", 0),
             "routes": len(event.get("mcp_results", {}).get("routes", [])),
             "lodging": len(event.get("mcp_results", {}).get("lodging", [])),
         }
@@ -442,6 +442,11 @@ def _render_log_file_viewer() -> None:
             "issues": event.get("issues"),
             "node_seconds": event.get("node_duration_seconds"),
             "elapsed_seconds": event.get("elapsed_seconds"),
+            "last_cache_hits": event.get("mcp_cache_stats", {}).get("last_hits", 0),
+            "last_cache_misses": event.get("mcp_cache_stats", {}).get("last_misses", 0),
+            "cache_hits": event.get("mcp_cache_stats", {}).get("hits", 0),
+            "cache_misses": event.get("mcp_cache_stats", {}).get("misses", 0),
+            "cache_entries": event.get("mcp_cache_stats", {}).get("entries", 0),
             "routes": len(event.get("mcp_results", {}).get("routes", [])),
             "lodging": len(event.get("mcp_results", {}).get("lodging", [])),
             "transfers": len(event.get("plan_transfers", [])),
@@ -487,58 +492,47 @@ def _render_log_file_viewer() -> None:
 def _render_log_plan(plan: dict[str, Any]) -> None:
     st.caption(f"{plan.get('title', '')} | {plan.get('origin', '')} -> {plan.get('destination', '')}")
     day_rows = []
-    visit_rows = []
-    schedule_rows = []
+    timeline_rows = []
     for day in plan.get("days", []):
+        visits = [
+            (item.get("stay") or {}).get("place_name")
+            for item in day.get("timeline", [])
+            if (item.get("stay") or {}).get("purpose") == "visit"
+        ]
         day_rows.append(
             {
                 "day": day.get("day"),
                 "date": day.get("date"),
                 "city": day.get("city"),
                 "hotel": day.get("accommodation_area"),
-                "transport_minutes": day.get("total_transport_minutes"),
-                "sleep_minutes": day.get("sleep_minutes"),
+                "visits": " -> ".join(item for item in visits if item),
+                "move_minutes": day.get("total_move_minutes"),
+                "stay_minutes": day.get("total_stay_minutes"),
+                "sleep_minutes": day.get("total_sleep_minutes"),
                 "cost": day.get("estimated_cost"),
             }
         )
-        for block in day.get("schedule_blocks", []):
-            transfer = block.get("transfer") or {}
-            schedule_rows.append(
+        for item in day.get("timeline", []):
+            stay = item.get("stay") or {}
+            move = item.get("move") or {}
+            timeline_rows.append(
                 {
                     "day": day.get("day"),
                     "date": day.get("date"),
-                    "time": f"{block.get('start_time')} - {block.get('end_time')}",
-                    "type": block.get("block_type"),
-                    "title": block.get("title"),
-                    "place": block.get("place_name") or "",
-                    "transfer": (
-                        f"{transfer.get('origin')} -> {transfer.get('destination')}"
-                        if transfer
-                        else ""
-                    ),
-                    "minutes": transfer.get("estimated_duration_minutes", ""),
-                }
-            )
-        for visit in day.get("visits", []):
-            visit_rows.append(
-                {
-                    "day": day.get("day"),
-                    "date": day.get("date"),
-                    "time": f"{visit.get('start_time')} - {visit.get('end_time')}",
-                    "place": visit.get("place_name"),
-                    "category": visit.get("category"),
-                    "duration": visit.get("visit_duration_minutes"),
-                    "to_next": (visit.get("transport_to_next") or {}).get("destination", ""),
-                    "to_next_minutes": (visit.get("transport_to_next") or {}).get("estimated_duration_minutes", ""),
+                    "time": f"{item.get('start_time')} - {item.get('end_time')}",
+                    "type": item.get("item_type"),
+                    "purpose": stay.get("purpose") or move.get("purpose"),
+                    "place_or_route": stay.get("place_name") or f"{move.get('origin', '')} -> {move.get('destination', '')}",
+                    "mode": move.get("mode", ""),
+                    "minutes": stay.get("duration_minutes") or move.get("duration_minutes") or "",
+                    "cost": stay.get("estimated_cost") or move.get("estimated_cost") or "",
+                    "notes": stay.get("notes") or move.get("notes") or item.get("notes", ""),
                 }
             )
     st.dataframe(day_rows, hide_index=True, use_container_width=True)
-    if schedule_rows:
-        st.caption("\u65f6\u95f4\u5757")
-        st.dataframe(schedule_rows, hide_index=True, use_container_width=True)
-    if visit_rows:
-        st.caption("\u8bbf\u95ee\u70b9")
-        st.dataframe(visit_rows, hide_index=True, use_container_width=True)
+    if timeline_rows:
+        st.caption("Timeline")
+        st.dataframe(timeline_rows, hide_index=True, use_container_width=True)
 
 
 def _render_json_rows(rows: list[dict[str, Any]], empty_message: str) -> None:
@@ -571,21 +565,6 @@ def _latest_event_with(events: list[dict[str, Any]], key: str) -> dict[str, Any]
         if key in event:
             return event
     return None
-
-
-def _transfer_row(label: str, transfer) -> dict[str, Any]:
-    return {
-        "\u987a\u5e8f": label,
-        "\u65f6\u95f4": "",
-        "\u5730\u70b9": f"{transfer.origin} -> {transfer.destination}",
-        "\u7c7b\u578b": "transfer",
-        "\u6e38\u73a9\u5206\u949f": "",
-        "\u4e0b\u4e00\u7a0b": transfer.destination,
-        "\u4ea4\u901a": transfer.mode.value,
-        "\u4ea4\u901a\u5206\u949f": transfer.estimated_duration_minutes,
-        "\u8d39\u7528": transfer.estimated_cost,
-        "\u5907\u6ce8": transfer.notes,
-    }
 
 
 def _format_date_time(day_value, time_value) -> str:
@@ -635,6 +614,7 @@ def _workflow_event(
         "plan_versions": len(state.get("plan_versions", [])),
         "state_keys": sorted(state.keys()),
         "mcp_errors": list(state.get("mcp_errors", [])),
+        "mcp_cache_stats": dict(state.get("mcp_cache_stats", {})),
     }
     if state.get("raw_user_input"):
         event["raw_user_input"] = _to_jsonable(state["raw_user_input"])
@@ -673,9 +653,11 @@ def _summarize_state(node_name: str, state: dict[str, Any]) -> str:
         return f"planned {count} MCP queries"
     if "collect" in node_name:
         results = state.get("mcp_results", McpResults())
+        cache_stats = state.get("mcp_cache_stats", {})
         return (
             f"weather={len(results.weather)}, attractions={len(results.attractions)}, "
-            f"routes={len(results.routes)}, areas={len(results.accommodation_areas)}, lodging={len(_mcp_lodging(results))}"
+            f"routes={len(results.routes)}, areas={len(results.accommodation_areas)}, lodging={len(_mcp_lodging(results))}, "
+            f"cache={cache_stats.get('last_hits', 0)}/{cache_stats.get('last_misses', 0)}"
         )
     if node_name in {"draft_day_schedule", "initial_plan", "replan"} and state.get("current_plan"):
         plan = state["current_plan"]
@@ -711,36 +693,25 @@ def _extract_plan_transfers(plan: TripPlan) -> list[dict[str, Any]]:
             }
         )
     for day in plan.days:
-        for label, transfer in (
-            ("arrival", getattr(day, "arrival_transfer", None)),
-            ("hotel_to_first", getattr(day, "start_transfer_to_first", None)),
-            ("last_to_hotel", getattr(day, "return_transfer_to_accommodation", None)),
-            ("departure", getattr(day, "departure_transfer", None)),
-        ):
-            if transfer:
-                rows.append(_transfer_log_row(day.day, day.date.isoformat(), label, transfer))
-        for visit in day.visits:
-            if visit.transport_to_next:
-                rows.append(_transfer_log_row(day.day, day.date.isoformat(), "between_visits", visit.transport_to_next))
-        for block in getattr(day, "schedule_blocks", []):
-            if block.transfer:
-                rows.append(_transfer_log_row(day.day, day.date.isoformat(), f"block_{block.block_type.value}", block.transfer))
+        for item in day.timeline:
+            if not item.move:
+                continue
+            rows.append(
+                {
+                    "day": day.day,
+                    "date": day.date.isoformat(),
+                    "label": item.move.purpose.value,
+                    "time": f"{item.start_time.strftime('%H:%M')}-{item.end_time.strftime('%H:%M')}",
+                    "origin": item.move.origin,
+                    "destination": item.move.destination,
+                    "mode": item.move.mode.value,
+                    "duration_minutes": item.move.duration_minutes or item.duration_minutes,
+                    "distance_km": item.move.distance_km,
+                    "cost": item.move.estimated_cost,
+                    "notes": item.move.notes,
+                }
+            )
     return rows
-
-
-def _transfer_log_row(day: int, day_date: str, label: str, transfer) -> dict[str, Any]:
-    return {
-        "day": day,
-        "date": day_date,
-        "label": label,
-        "origin": transfer.origin,
-        "destination": transfer.destination,
-        "mode": transfer.mode.value,
-        "duration_minutes": transfer.estimated_duration_minutes,
-        "distance_km": transfer.estimated_distance_km,
-        "cost": transfer.estimated_cost,
-        "notes": transfer.notes,
-    }
 
 
 def _to_jsonable(value: Any) -> Any:

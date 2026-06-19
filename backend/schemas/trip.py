@@ -94,18 +94,27 @@ class SegmentType(str, Enum):
     LOCAL = "local"
 
 
-class ScheduleBlockType(str, Enum):
-    SLEEP = "sleep"
-    BREAKFAST = "breakfast"
-    LUNCH = "lunch"
-    DINNER = "dinner"
-    REST = "rest"
+class TimelineItemType(str, Enum):
+    STAY = "stay"
+    MOVE = "move"
+
+
+class StayPurpose(str, Enum):
     VISIT = "visit"
-    LOCAL_TRANSFER = "local_transfer"
-    INTERCITY_TRANSFER = "intercity_transfer"
+    SLEEP = "sleep"
+    MEAL = "meal"
+    REST = "rest"
     HOTEL_CHECKIN = "hotel_checkin"
     HOTEL_CHECKOUT = "hotel_checkout"
-    FREE_TIME = "free_time"
+    BUFFER = "buffer"
+    OTHER = "other"
+
+
+class MovePurpose(str, Enum):
+    LOCAL = "local"
+    OUTBOUND = "outbound"
+    INTERCITY = "intercity"
+    RETURN = "return"
 
 
 class RepairAction(str, Enum):
@@ -266,73 +275,92 @@ class AccommodationStay(BaseModel):
         return self
 
 
-class DayScheduleBlock(BaseModel):
-    sequence: int = Field(ge=1)
-    block_type: ScheduleBlockType
-    start_time: time
-    end_time: time
-    title: str
-    city: str
-    place_name: str | None = None
-    transfer: TransferLeg | None = None
-    estimated_cost: float = Field(default=0, ge=0)
-    currency: str = "CNY"
-    notes: str = ""
-
-    @model_validator(mode="after")
-    def validate_time_order(self) -> "DayScheduleBlock":
-        if self.end_time <= self.start_time:
-            raise ValueError("end_time must be later than start_time")
-        return self
-
-
-class VisitSlot(BaseModel):
-    sequence: int = Field(ge=1)
+class StayDetail(BaseModel):
     place_name: str
     city: str
-    category: PlaceCategory
-    start_time: time
-    end_time: time
-    visit_duration_minutes: int = Field(ge=0)
-    transport_to_next: TransferLeg | None = None
+    purpose: StayPurpose = StayPurpose.OTHER
+    category: PlaceCategory | None = None
+    activity: str = ""
+    duration_minutes: int = Field(default=0, ge=0)
     estimated_cost: float = Field(default=0, ge=0)
     currency: str = "CNY"
     notes: str = ""
 
+
+class MoveDetail(BaseModel):
+    origin: str
+    destination: str
+    origin_city: str = ""
+    destination_city: str = ""
+    mode: TransportMode
+    purpose: MovePurpose = MovePurpose.LOCAL
+    duration_minutes: int = Field(default=0, ge=0)
+    distance_km: float = Field(default=0, ge=0)
+    estimated_cost: float = Field(default=0, ge=0)
+    currency: str = "CNY"
+    station_or_terminal: str = ""
+    train_or_flight_number: str = ""
+    booking_notes: str = ""
+    notes: str = ""
+
+
+class TimelineItem(BaseModel):
+    sequence: int = Field(ge=1)
+    item_type: TimelineItemType
+    start_time: time
+    end_time: time
+    city: str
+    stay: StayDetail | None = None
+    move: MoveDetail | None = None
+    notes: str = ""
+
     @model_validator(mode="after")
-    def validate_time_order(self) -> "VisitSlot":
+    def validate_timeline_item(self) -> "TimelineItem":
         if self.end_time <= self.start_time:
             raise ValueError("end_time must be later than start_time")
+        if self.item_type == TimelineItemType.STAY and self.stay is None:
+            raise ValueError("stay detail is required for stay timeline items")
+        if self.item_type == TimelineItemType.MOVE and self.move is None:
+            raise ValueError("move detail is required for move timeline items")
+        if self.item_type == TimelineItemType.STAY and self.move is not None:
+            raise ValueError("move detail must be empty for stay timeline items")
+        if self.item_type == TimelineItemType.MOVE and self.stay is not None:
+            raise ValueError("stay detail must be empty for move timeline items")
         return self
+
+    @computed_field
+    @property
+    def duration_minutes(self) -> int:
+        return (self.end_time.hour * 60 + self.end_time.minute) - (
+            self.start_time.hour * 60 + self.start_time.minute
+        )
 
 
 class PlanDay(BaseModel):
     day: int = Field(ge=1)
     date: Date
     city: str
-    visits: list[VisitSlot] = Field(default_factory=list)
+    timeline: list[TimelineItem] = Field(default_factory=list)
     accommodation_area: str | None = None
     overnight_accommodation: str | None = None
-    arrival_transfer: TransferLeg | None = None
-    start_transfer_to_first: TransferLeg | None = None
-    return_transfer_to_accommodation: TransferLeg | None = None
-    departure_transfer: TransferLeg | None = None
-    schedule_blocks: list[DayScheduleBlock] = Field(default_factory=list)
-    total_visit_minutes: int = Field(default=0, ge=0)
-    total_transport_minutes: int = Field(default=0, ge=0)
-    sleep_minutes: int = Field(default=0, ge=0)
+    total_stay_minutes: int = Field(default=0, ge=0)
+    total_move_minutes: int = Field(default=0, ge=0)
+    total_sleep_minutes: int = Field(default=0, ge=0)
     estimated_cost: float = Field(default=0, ge=0)
     currency: str = "CNY"
     daily_notes: str = ""
 
     @model_validator(mode="after")
-    def validate_visit_sequence(self) -> "PlanDay":
-        sequences = [visit.sequence for visit in self.visits]
-        if len(sequences) != len(set(sequences)):
-            raise ValueError("visit sequence values must be unique within a day")
-        block_sequences = [block.sequence for block in self.schedule_blocks]
-        if len(block_sequences) != len(set(block_sequences)):
-            raise ValueError("schedule block sequence values must be unique within a day")
+    def validate_timeline(self) -> "PlanDay":
+        timeline_sequences = [item.sequence for item in self.timeline]
+        if len(timeline_sequences) != len(set(timeline_sequences)):
+            raise ValueError("timeline sequence values must be unique within a day")
+        ordered = sorted(self.timeline, key=lambda item: item.sequence)
+        previous_end: time | None = None
+        for item in ordered:
+            if previous_end is not None and item.start_time < previous_end:
+                raise ValueError("timeline items must not overlap within a day")
+            previous_end = item.end_time
         return self
 
 

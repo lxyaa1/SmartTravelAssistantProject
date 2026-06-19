@@ -8,7 +8,7 @@ This is a local runnable prototype:
 
 - Pydantic schemas for user requests, trip plans, MCP results, and validation issues.
 - Structured traveler and accommodation requirements, including children who count as travelers but do not need separate beds.
-- Structured route skeletons, route segments, accommodation stays, daily schedule blocks, and plan quality gates.
+- Structured route skeletons, route segments, accommodation stays, daily move/stay timelines, and plan quality gates.
 - LangGraph workflow with city-route planning, pre-plan MCP queries, day schedule drafting, plan-check MCP queries, validation, repair strategy selection, and replanning.
 - Mock MCP stdio server scaffold plus optional Amap Maps MCP backend.
 - Local Streamlit UI with workflow streaming, log visualization, no login, database, or registration.
@@ -57,7 +57,7 @@ Current LLM-backed nodes:
 
 The query planners, MCP data collection, validation routing, and final markdown rendering remain deterministic Python nodes.
 
-In the Streamlit UI, the `LLM` checkbox only controls the two planning nodes:
+In the Streamlit UI, the `LLM` checkbox controls the planning/replanning nodes:
 
 ```text
 city_route_planner
@@ -66,6 +66,19 @@ replan
 ```
 
 When unchecked, these nodes use deterministic Python logic. When checked, they call DashScope/Qwen and still must return the same `TripPlan` Pydantic schema.
+
+## Trip Plan Schema
+
+The daily itinerary is timeline-only. `PlanDay` no longer has separate `visits`, `schedule_blocks`, or daily transfer fields.
+
+Each `PlanDay.timeline` item is one primitive:
+
+```text
+stay: at one place for one purpose, such as sleep, meal, visit, rest, check-in, or checkout
+move: from one concrete point to another, with mode, purpose, duration, distance, cost, and notes
+```
+
+This keeps the internal plan consistent: a trip is either staying somewhere or moving from one point to another.
 
 The Streamlit UI streams workflow node updates while a plan is running and writes action logs to:
 

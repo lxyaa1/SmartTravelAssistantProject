@@ -24,7 +24,7 @@ def test_should_use_llm_can_be_disabled_by_env(monkeypatch) -> None:
     assert should_use_llm({}) is False
 
 
-def test_repair_trip_plan_payload_splits_cross_midnight_sleep_blocks() -> None:
+def test_repair_trip_plan_payload_splits_cross_midnight_sleep_timeline_items() -> None:
     raw = """
     {
       "title": "test",
@@ -35,22 +35,30 @@ def test_repair_trip_plan_payload_splits_cross_midnight_sleep_blocks() -> None:
           "day": 1,
           "date": "2026-07-01",
           "city": "Xinzhou",
-          "schedule_blocks": [
+          "timeline": [
             {
               "sequence": 1,
-              "block_type": "sleep",
+              "item_type": "stay",
               "start_time": "22:30",
               "end_time": "07:30",
-              "title": "Sleep",
-              "city": "Xinzhou"
+              "city": "Xinzhou",
+              "stay": {
+                "place_name": "Xinzhou Hotel",
+                "city": "Xinzhou",
+                "purpose": "sleep"
+              }
             },
             {
               "sequence": 2,
-              "block_type": "free_time",
+              "item_type": "stay",
               "start_time": "12:00",
               "end_time": "12:00",
-              "title": "Buffer",
-              "city": "Xinzhou"
+              "city": "Xinzhou",
+              "stay": {
+                "place_name": "Buffer",
+                "city": "Xinzhou",
+                "purpose": "rest"
+              }
             }
           ]
         }
@@ -61,6 +69,190 @@ def test_repair_trip_plan_payload_splits_cross_midnight_sleep_blocks() -> None:
     repaired = _repair_payload_for_schema(raw, TripPlan)
     plan = TripPlan.model_validate(repaired)
 
-    blocks = plan.days[0].schedule_blocks
-    assert [(block.start_time.hour, block.end_time.hour) for block in blocks[:2]] == [(0, 7), (12, 12)]
-    assert all(block.end_time > block.start_time for block in blocks)
+    timeline = plan.days[0].timeline
+    assert [(item.start_time.hour, item.end_time.hour) for item in timeline[:2]] == [(0, 7), (12, 12)]
+    assert all(item.end_time > item.start_time for item in timeline)
+
+
+def test_repair_trip_plan_payload_removes_timeline_overlaps() -> None:
+    raw = """
+    {
+      "title": "test",
+      "origin": "Beijing",
+      "destination": "Shanxi",
+      "days": [
+        {
+          "day": 1,
+          "date": "2026-07-01",
+          "city": "Taiyuan",
+          "timeline": [
+            {
+              "sequence": 1,
+              "item_type": "stay",
+              "start_time": "09:00",
+              "end_time": "11:00",
+              "city": "Taiyuan",
+              "stay": {
+                "place_name": "Jinci Temple",
+                "city": "Taiyuan",
+                "purpose": "visit"
+              }
+            },
+            {
+              "sequence": 2,
+              "item_type": "move",
+              "start_time": "10:30",
+              "end_time": "11:00",
+              "city": "Taiyuan",
+              "move": {
+                "origin": "Jinci Temple",
+                "destination": "Hotel",
+                "mode": "taxi",
+                "purpose": "transfer"
+              }
+            }
+          ]
+        }
+      ]
+    }
+    """
+
+    repaired = _repair_payload_for_schema(raw, TripPlan)
+    plan = TripPlan.model_validate(repaired)
+
+    timeline = plan.days[0].timeline
+    assert timeline[1].start_time >= timeline[0].end_time
+    assert timeline[1].move is not None
+    assert timeline[1].move.purpose.value == "local"
+
+
+def test_repair_trip_plan_payload_maps_shopping_purpose_to_visit_category() -> None:
+    raw = """
+    {
+      "title": "test",
+      "origin": "Beijing",
+      "destination": "Shanxi",
+      "days": [
+        {
+          "day": 1,
+          "date": "2026-07-01",
+          "city": "Taiyuan",
+          "timeline": [
+            {
+              "sequence": 1,
+              "item_type": "stay",
+              "start_time": "15:00",
+              "end_time": "16:00",
+              "city": "Taiyuan",
+              "stay": {
+                "place_name": "Liuxiang Shopping Street",
+                "city": "Taiyuan",
+                "purpose": "shopping"
+              }
+            }
+          ]
+        }
+      ]
+    }
+    """
+
+    repaired = _repair_payload_for_schema(raw, TripPlan)
+    plan = TripPlan.model_validate(repaired)
+
+    stay = plan.days[0].timeline[0].stay
+    assert stay is not None
+    assert stay.purpose.value == "visit"
+    assert stay.category is not None
+    assert stay.category.value == "shopping"
+
+
+def test_repair_trip_plan_payload_clamps_overflow_times_and_repairs_enums() -> None:
+    raw = """
+    {
+      "title": "test",
+      "origin": "Beijing",
+      "destination": "Shanxi",
+      "days": [
+        {
+          "day": 1,
+          "date": "2026-07-01",
+          "city": "Taiyuan",
+          "timeline": [
+            {
+              "sequence": 1,
+              "item_type": "stay",
+              "start_time": "09:00",
+              "end_time": "10:00",
+              "city": "Taiyuan",
+              "stay": {
+                "place_name": "Liuxiang Shopping Street",
+                "city": "Taiyuan",
+                "purpose": "shopping"
+              }
+            },
+            {
+              "sequence": 2,
+              "item_type": "move",
+              "start_time": "25:52",
+              "end_time": "26:52",
+              "city": "Taiyuan",
+              "move": {
+                "origin": "Liuxiang Shopping Street",
+                "destination": "Hotel",
+                "mode": "taxi",
+                "purpose": "transfer"
+              }
+            }
+          ]
+        },
+        {
+          "day": 2,
+          "date": "2026-07-02",
+          "city": "Taiyuan",
+          "timeline": [
+            {
+              "sequence": 1,
+              "item_type": "stay",
+              "start_time": "09:00",
+              "end_time": "11:00",
+              "city": "Taiyuan",
+              "stay": {
+                "place_name": "Jinci Temple",
+                "city": "Taiyuan",
+                "purpose": "visit"
+              }
+            },
+            {
+              "sequence": 2,
+              "item_type": "stay",
+              "start_time": "10:30",
+              "end_time": "12:00",
+              "city": "Taiyuan",
+              "stay": {
+                "place_name": "Lunch",
+                "city": "Taiyuan",
+                "purpose": "food"
+              }
+            }
+          ]
+        }
+      ]
+    }
+    """
+
+    repaired = _repair_payload_for_schema(raw, TripPlan)
+    plan = TripPlan.model_validate(repaired)
+
+    day1 = plan.days[0]
+    assert day1.timeline[0].stay is not None
+    assert day1.timeline[0].stay.purpose.value == "visit"
+    assert day1.timeline[0].stay.category is not None
+    assert day1.timeline[0].stay.category.value == "shopping"
+    assert day1.timeline[1].end_time.hour <= 23
+    assert day1.timeline[1].move is not None
+    assert day1.timeline[1].move.purpose.value == "local"
+
+    day2 = plan.days[1]
+    assert day2.timeline[1].start_time >= day2.timeline[0].end_time
+    assert day2.timeline[1].stay is not None
+    assert day2.timeline[1].stay.purpose.value == "meal"

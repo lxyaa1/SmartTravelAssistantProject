@@ -5,7 +5,20 @@ from datetime import date, time
 import pytest
 from pydantic import ValidationError
 
-from backend.schemas.trip import AccommodationRequirement, PlaceCategory, PlanDay, TripRequest, TravelerGroup, VisitSlot
+from backend.schemas.trip import (
+    AccommodationRequirement,
+    MoveDetail,
+    MovePurpose,
+    PlaceCategory,
+    PlanDay,
+    StayDetail,
+    StayPurpose,
+    TimelineItem,
+    TimelineItemType,
+    TransportMode,
+    TripRequest,
+    TravelerGroup,
+)
 
 
 def test_trip_request_rejects_invalid_date_range() -> None:
@@ -73,34 +86,83 @@ def test_traveler_group_rejects_more_child_beds_than_children() -> None:
         TravelerGroup(adults=2, children=1, children_need_bed=2)
 
 
-def test_visit_slot_rejects_invalid_time_order() -> None:
+def test_timeline_stay_rejects_invalid_time_order() -> None:
     with pytest.raises(ValidationError):
-        VisitSlot(
+        TimelineItem(
             sequence=1,
-            place_name="West Lake",
-            city="Hangzhou",
-            category=PlaceCategory.OUTDOOR,
+            item_type=TimelineItemType.STAY,
             start_time=time(11, 0),
             end_time=time(10, 0),
-            visit_duration_minutes=60,
+            city="Hangzhou",
+            stay=StayDetail(
+                place_name="West Lake",
+                city="Hangzhou",
+                purpose=StayPurpose.VISIT,
+                category=PlaceCategory.OUTDOOR,
+            ),
         )
 
 
-def test_plan_day_rejects_duplicate_visit_sequence() -> None:
-    visit = VisitSlot(
-        sequence=1,
-        place_name="West Lake",
-        city="Hangzhou",
-        category=PlaceCategory.OUTDOOR,
-        start_time=time(9, 0),
-        end_time=time(10, 0),
-        visit_duration_minutes=60,
-    )
+def test_timeline_item_requires_matching_detail_type() -> None:
+    with pytest.raises(ValidationError):
+        TimelineItem(
+            sequence=1,
+            item_type=TimelineItemType.MOVE,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
+            city="Hangzhou",
+            stay=StayDetail(place_name="West Lake", city="Hangzhou"),
+        )
+
+
+def test_plan_day_rejects_duplicate_timeline_sequence() -> None:
+    item = _visit_item(sequence=1, start=time(9, 0), end=time(10, 0))
 
     with pytest.raises(ValidationError):
         PlanDay(
             day=1,
             date=date(2026, 7, 1),
             city="Hangzhou",
-            visits=[visit, visit.model_copy(deep=True)],
+            timeline=[item, item.model_copy(deep=True)],
         )
+
+
+def test_plan_day_rejects_overlapping_timeline_items() -> None:
+    with pytest.raises(ValidationError):
+        PlanDay(
+            day=1,
+            date=date(2026, 7, 1),
+            city="Hangzhou",
+            timeline=[
+                _visit_item(sequence=1, start=time(9, 0), end=time(11, 0)),
+                TimelineItem(
+                    sequence=2,
+                    item_type=TimelineItemType.MOVE,
+                    start_time=time(10, 30),
+                    end_time=time(11, 0),
+                    city="Hangzhou",
+                    move=MoveDetail(
+                        origin="West Lake",
+                        destination="Hangzhou Museum",
+                        mode=TransportMode.TAXI,
+                        purpose=MovePurpose.LOCAL,
+                    ),
+                ),
+            ],
+        )
+
+
+def _visit_item(sequence: int, start: time, end: time) -> TimelineItem:
+    return TimelineItem(
+        sequence=sequence,
+        item_type=TimelineItemType.STAY,
+        start_time=start,
+        end_time=end,
+        city="Hangzhou",
+        stay=StayDetail(
+            place_name="West Lake",
+            city="Hangzhou",
+            purpose=StayPurpose.VISIT,
+            category=PlaceCategory.OUTDOOR,
+        ),
+    )

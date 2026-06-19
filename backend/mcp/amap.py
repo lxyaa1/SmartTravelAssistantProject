@@ -50,6 +50,8 @@ PLACE_ALIASES = {
     "jinci temple": "\u664b\u7960\u535a\u7269\u9986",
 }
 
+_GEOCODE_CACHE: dict[tuple[str, str], str] = {}
+
 
 def should_use_amap_mcp(state: dict[str, Any]) -> bool:
     explicit = state.get("mcp_backend")
@@ -369,11 +371,17 @@ async def _geocode(tools: dict[str, Any], address: str, city: str) -> str:
 
     query_address = _query_place(address, city=city)
     query_city = _query_city(city)
+    cache_key = (query_address, query_city)
+    cached_location = _GEOCODE_CACHE.get(cache_key)
+    if cached_location:
+        return cached_location
+
     try:
         raw = await tools["maps_geo"].ainvoke({"address": query_address, "city": query_city})
     except Exception:
         location = await _search_location(tools=tools, keyword=query_address, city=query_city)
         if location:
+            _GEOCODE_CACHE[cache_key] = location
             return location
         raise
 
@@ -386,11 +394,14 @@ async def _geocode(tools: dict[str, Any], address: str, city: str) -> str:
         if isinstance(item, dict):
             location = _first_text(item.get("location"))
             if location:
+                _GEOCODE_CACHE[cache_key] = location
                 return location
 
     match = re.search(r"\d+\.\d+,\d+\.\d+", _raw_text(raw))
     if match:
-        return match.group(0)
+        location = match.group(0)
+        _GEOCODE_CACHE[cache_key] = location
+        return location
 
     raise ValueError(f"Amap geocode did not return a location for {address}")
 
