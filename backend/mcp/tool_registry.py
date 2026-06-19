@@ -17,6 +17,7 @@ MOCK_TRAVEL_TOOLS = ToolGroup(
         "get_attraction_detail",
         "search_attractions",
         "search_accommodation_areas",
+        "search_lodging_near_place",
     ),
 )
 

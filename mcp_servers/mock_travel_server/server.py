@@ -106,5 +106,41 @@ def search_accommodation_areas(city: str, budget_level: str = "medium", prefer_f
     ]
 
 
+@mcp.tool()
+def search_lodging_near_place(
+    city: str,
+    anchor_place: str,
+    budget_level: str = "medium",
+    prefer_family_room: bool = False,
+    radius_km: int = 5,
+):
+    """Return deterministic mock lodging tied to a concrete attraction anchor."""
+    family_note = "Family-room friendly." if prefer_family_room else "Standard traveler fit."
+    return [
+        {
+            "name": f"{anchor_place} Nearby Hotel",
+            "city": city,
+            "area": f"Near {anchor_place}",
+            "address": f"{city} {anchor_place} area",
+            "anchor_place": anchor_place,
+            "distance_to_anchor_km": 1.2,
+            "duration_to_anchor_minutes": 12,
+            "estimated_price_level": budget_level,
+            "notes": f"{family_note} Within {radius_km} km of the anchor.",
+        },
+        {
+            "name": f"{city} Railway Station Hotel",
+            "city": city,
+            "area": "Railway station area",
+            "address": f"{city} railway station",
+            "anchor_place": anchor_place,
+            "distance_to_anchor_km": 12,
+            "duration_to_anchor_minutes": 45,
+            "estimated_price_level": "low",
+            "notes": "Convenient for transfers but farther from the anchor.",
+        },
+    ]
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")

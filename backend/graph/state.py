@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from typing import TypedDict
 
-from backend.schemas.trip import FinalPlan, McpQueryPlan, McpResults, TripPlan, TripRequest, ValidationIssue
+from backend.schemas.trip import (
+    CityRoutePlan,
+    FinalPlan,
+    McpQueryPlan,
+    McpResults,
+    RepairStrategy,
+    TripPlan,
+    TripRequest,
+    ValidationIssue,
+)
 
 
 class TripState(TypedDict, total=False):
@@ -11,11 +20,13 @@ class TripState(TypedDict, total=False):
     mcp_backend: str
     mcp_errors: list[str]
     user_request: TripRequest
+    city_route_plan: CityRoutePlan
     pending_mcp_queries: McpQueryPlan
     current_plan: TripPlan
     plan_versions: list[TripPlan]
     mcp_results: McpResults
     issues: list[ValidationIssue]
+    repair_strategy: RepairStrategy
     iteration: int
     max_iterations: int
     final_plan: FinalPlan

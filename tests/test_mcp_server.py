@@ -16,6 +16,7 @@ from mcp_servers.mock_travel_server.server import (
     get_weather,
     search_accommodation_areas,
     search_attractions,
+    search_lodging_near_place,
 )
 
 
@@ -113,6 +114,15 @@ def test_mock_search_accommodation_areas_returns_area_options() -> None:
     assert results
     assert results[0]["area_name"] == "Hangzhou Lakeside Area"
     assert "families" in results[0]["suitable_for"]
+
+
+def test_mock_search_lodging_near_place_returns_anchor_lodging() -> None:
+    results = search_lodging_near_place("Hangzhou", "West Lake", "medium", True, 5)
+
+    assert results
+    assert results[0]["name"] == "West Lake Nearby Hotel"
+    assert results[0]["anchor_place"] == "West Lake"
+    assert results[0]["duration_to_anchor_minutes"] == 12
 
 
 def test_amap_mcp_discovers_all_official_tools() -> None:

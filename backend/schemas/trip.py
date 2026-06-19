@@ -33,13 +33,18 @@ class PlaceCategory(str, Enum):
 
 class IssueType(str, Enum):
     MISSING_MUST_VISIT = "missing_must_visit"
+    MISSING_RETURN_TRANSFER = "missing_return_transfer"
     BAD_WEATHER = "bad_weather"
     ATTRACTION_CLOSED = "attraction_closed"
     ROUTE_TOO_LONG = "route_too_long"
+    LODGING_TOO_FAR = "lodging_too_far"
+    ROUTE_ENDPOINT_TOO_VAGUE = "route_endpoint_too_vague"
     DAY_TOO_BUSY = "day_too_busy"
+    INCOMPLETE_DAY_TIMELINE = "incomplete_day_timeline"
     PREFERENCE_CONFLICT = "preference_conflict"
     BUDGET_EXCEEDED = "budget_exceeded"
     TIME_CONFLICT = "time_conflict"
+    INFEASIBLE_PLAN = "infeasible_plan"
     NOT_ENOUGH_BEDS = "not_enough_beds"
     TOO_MANY_BEDS_BOOKED = "too_many_beds_booked"
     CHILD_UNFRIENDLY_SCHEDULE = "child_unfriendly_schedule"
@@ -56,11 +61,14 @@ class Severity(str, Enum):
 
 class AgentName(str, Enum):
     INPUT_PARSER = "input_parser"
+    CITY_ROUTE_PLANNER = "city_route_planner"
     PREPLAN_QUERY_PLANNER = "preplan_query_planner"
     ROUTE_PLANNER = "route_planner"
+    DRAFT_DAY_SCHEDULE = "draft_day_schedule"
     PLAN_CHECK_QUERY_PLANNER = "plan_check_query_planner"
     DATA_COLLECTOR = "data_collector"
     VALIDATOR = "validator"
+    REPAIR_STRATEGY_PLANNER = "repair_strategy_planner"
     REPLANNER = "replanner"
     FINAL_WRITER = "final_writer"
 
@@ -71,11 +79,39 @@ class McpToolName(str, Enum):
     GET_ATTRACTION_DETAIL = "get_attraction_detail"
     SEARCH_ATTRACTIONS = "search_attractions"
     SEARCH_ACCOMMODATION_AREAS = "search_accommodation_areas"
+    SEARCH_LODGING_NEAR_PLACE = "search_lodging_near_place"
 
 
 class McpQueryStage(str, Enum):
     PREPLAN = "preplan"
     PLAN_CHECK = "plan_check"
+
+
+class SegmentType(str, Enum):
+    OUTBOUND = "outbound"
+    INTERCITY = "intercity"
+    RETURN = "return"
+    LOCAL = "local"
+
+
+class ScheduleBlockType(str, Enum):
+    SLEEP = "sleep"
+    BREAKFAST = "breakfast"
+    LUNCH = "lunch"
+    DINNER = "dinner"
+    REST = "rest"
+    VISIT = "visit"
+    LOCAL_TRANSFER = "local_transfer"
+    INTERCITY_TRANSFER = "intercity_transfer"
+    HOTEL_CHECKIN = "hotel_checkin"
+    HOTEL_CHECKOUT = "hotel_checkout"
+    FREE_TIME = "free_time"
+
+
+class RepairAction(str, Enum):
+    REPLAN = "replan"
+    FINALIZE = "finalize"
+    INFEASIBLE = "infeasible"
 
 
 class TravelerGroup(BaseModel):
@@ -173,6 +209,83 @@ class TransferLeg(BaseModel):
     notes: str = ""
 
 
+class TripSegment(BaseModel):
+    sequence: int = Field(ge=1)
+    segment_type: SegmentType
+    origin: str
+    destination: str
+    origin_city: str = ""
+    destination_city: str = ""
+    mode: TransportMode
+    departure_date: Date | None = None
+    departure_time: time | None = None
+    arrival_date: Date | None = None
+    arrival_time: time | None = None
+    estimated_duration_minutes: int = Field(default=0, ge=0)
+    estimated_distance_km: float = Field(default=0, ge=0)
+    estimated_cost: float = Field(default=0, ge=0)
+    currency: str = "CNY"
+    station_or_terminal: str = ""
+    train_or_flight_number: str = ""
+    booking_notes: str = ""
+    notes: str = ""
+
+    @model_validator(mode="after")
+    def validate_segment_time_order(self) -> "TripSegment":
+        if (
+            self.departure_date is not None
+            and self.arrival_date is not None
+            and self.departure_time is not None
+            and self.arrival_time is not None
+            and (self.arrival_date, self.arrival_time) <= (self.departure_date, self.departure_time)
+        ):
+            raise ValueError("segment arrival must be later than departure")
+        return self
+
+
+class AccommodationStay(BaseModel):
+    hotel_name: str
+    city: str
+    area: str = ""
+    address: str = ""
+    location: str = ""
+    check_in_date: Date
+    check_out_date: Date
+    bed_count: int = Field(default=1, ge=1)
+    room_count: int | None = Field(default=None, ge=1)
+    reason: str = ""
+    nearby_anchor_places: list[str] = Field(default_factory=list)
+    estimated_cost_per_night: float = Field(default=0, ge=0)
+    currency: str = "CNY"
+    notes: str = ""
+
+    @model_validator(mode="after")
+    def validate_stay_dates(self) -> "AccommodationStay":
+        if self.check_out_date < self.check_in_date:
+            raise ValueError("check_out_date must be on or after check_in_date")
+        return self
+
+
+class DayScheduleBlock(BaseModel):
+    sequence: int = Field(ge=1)
+    block_type: ScheduleBlockType
+    start_time: time
+    end_time: time
+    title: str
+    city: str
+    place_name: str | None = None
+    transfer: TransferLeg | None = None
+    estimated_cost: float = Field(default=0, ge=0)
+    currency: str = "CNY"
+    notes: str = ""
+
+    @model_validator(mode="after")
+    def validate_time_order(self) -> "DayScheduleBlock":
+        if self.end_time <= self.start_time:
+            raise ValueError("end_time must be later than start_time")
+        return self
+
+
 class VisitSlot(BaseModel):
     sequence: int = Field(ge=1)
     place_name: str
@@ -199,11 +312,15 @@ class PlanDay(BaseModel):
     city: str
     visits: list[VisitSlot] = Field(default_factory=list)
     accommodation_area: str | None = None
+    overnight_accommodation: str | None = None
     arrival_transfer: TransferLeg | None = None
     start_transfer_to_first: TransferLeg | None = None
     return_transfer_to_accommodation: TransferLeg | None = None
+    departure_transfer: TransferLeg | None = None
+    schedule_blocks: list[DayScheduleBlock] = Field(default_factory=list)
     total_visit_minutes: int = Field(default=0, ge=0)
     total_transport_minutes: int = Field(default=0, ge=0)
+    sleep_minutes: int = Field(default=0, ge=0)
     estimated_cost: float = Field(default=0, ge=0)
     currency: str = "CNY"
     daily_notes: str = ""
@@ -213,16 +330,29 @@ class PlanDay(BaseModel):
         sequences = [visit.sequence for visit in self.visits]
         if len(sequences) != len(set(sequences)):
             raise ValueError("visit sequence values must be unique within a day")
+        block_sequences = [block.sequence for block in self.schedule_blocks]
+        if len(block_sequences) != len(set(block_sequences)):
+            raise ValueError("schedule block sequence values must be unique within a day")
         return self
+
+
+class PlanQualityGate(BaseModel):
+    can_finalize: bool = True
+    blocking_issue_count: int = Field(default=0, ge=0)
+    max_severity: Severity | None = None
+    reason: str = ""
 
 
 class TripPlan(BaseModel):
     title: str
     origin: str
     destination: str
+    route_segments: list[TripSegment] = Field(default_factory=list)
+    accommodations: list[AccommodationStay] = Field(default_factory=list)
     days: list[PlanDay] = Field(default_factory=list)
     total_estimated_cost: float = Field(default=0, ge=0)
     currency: str = "CNY"
+    quality_gate: PlanQualityGate = Field(default_factory=PlanQualityGate)
     assumptions: list[str] = Field(default_factory=list)
 
 
@@ -255,6 +385,19 @@ class AccommodationAreaResult(BaseModel):
     notes: str = ""
 
 
+class LodgingResult(BaseModel):
+    name: str
+    city: str
+    area: str = ""
+    address: str = ""
+    location: str = ""
+    anchor_place: str = ""
+    distance_to_anchor_km: float = Field(default=0, ge=0)
+    duration_to_anchor_minutes: int = Field(default=0, ge=0)
+    estimated_price_level: BudgetLevel = BudgetLevel.MEDIUM
+    notes: str = ""
+
+
 class RouteResult(BaseModel):
     origin: str
     destination: str
@@ -268,6 +411,7 @@ class McpResults(BaseModel):
     attractions: list[AttractionResult] = Field(default_factory=list)
     routes: list[RouteResult] = Field(default_factory=list)
     accommodation_areas: list[AccommodationAreaResult] = Field(default_factory=list)
+    lodging: list[LodgingResult] = Field(default_factory=list)
 
 
 class McpQuery(BaseModel):
@@ -305,8 +449,39 @@ class ParsedRequestOutput(BaseModel):
     request: TripRequest
 
 
+class CityStayPlan(BaseModel):
+    sequence: int = Field(ge=1)
+    city: str
+    start_date: Date
+    end_date: Date
+    anchor_places: list[str] = Field(default_factory=list)
+    lodging_anchor: str = ""
+    notes: str = ""
+
+    @model_validator(mode="after")
+    def validate_stay_date_order(self) -> "CityStayPlan":
+        if self.end_date < self.start_date:
+            raise ValueError("city stay end_date must be on or after start_date")
+        return self
+
+
+class CityRoutePlan(BaseModel):
+    origin: str
+    destination: str
+    stays: list[CityStayPlan] = Field(default_factory=list)
+    segments: list[TripSegment] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
+class RepairStrategy(BaseModel):
+    action: RepairAction
+    reason: str = ""
+    target_issue_types: list[IssueType] = Field(default_factory=list)
+
+
 class PreplanQueryPlannerInput(BaseModel):
     request: TripRequest
+    city_route_plan: CityRoutePlan | None = None
 
 
 class PreplanQueryPlannerOutput(BaseModel):
@@ -314,13 +489,34 @@ class PreplanQueryPlannerOutput(BaseModel):
     query_plan: McpQueryPlan
 
 
+class CityRoutePlannerInput(BaseModel):
+    request: TripRequest
+
+
+class CityRoutePlannerOutput(BaseModel):
+    agent: Literal[AgentName.CITY_ROUTE_PLANNER] = AgentName.CITY_ROUTE_PLANNER
+    city_route_plan: CityRoutePlan
+
+
 class RoutePlannerInput(BaseModel):
     request: TripRequest
     mcp_results: McpResults = Field(default_factory=McpResults)
+    city_route_plan: CityRoutePlan | None = None
 
 
 class RoutePlannerOutput(BaseModel):
     agent: Literal[AgentName.ROUTE_PLANNER] = AgentName.ROUTE_PLANNER
+    plan: TripPlan
+
+
+class DraftDayScheduleInput(BaseModel):
+    request: TripRequest
+    city_route_plan: CityRoutePlan
+    mcp_results: McpResults = Field(default_factory=McpResults)
+
+
+class DraftDayScheduleOutput(BaseModel):
+    agent: Literal[AgentName.DRAFT_DAY_SCHEDULE] = AgentName.DRAFT_DAY_SCHEDULE
     plan: TripPlan
 
 
@@ -353,6 +549,18 @@ class ValidatorInput(BaseModel):
 class ValidatorOutput(BaseModel):
     agent: Literal[AgentName.VALIDATOR] = AgentName.VALIDATOR
     issues: list[ValidationIssue] = Field(default_factory=list)
+    quality_gate: PlanQualityGate = Field(default_factory=PlanQualityGate)
+
+
+class RepairStrategyPlannerInput(BaseModel):
+    issues: list[ValidationIssue] = Field(default_factory=list)
+    iteration: int = Field(ge=0)
+    max_iterations: int = Field(ge=0)
+
+
+class RepairStrategyPlannerOutput(BaseModel):
+    agent: Literal[AgentName.REPAIR_STRATEGY_PLANNER] = AgentName.REPAIR_STRATEGY_PLANNER
+    repair_strategy: RepairStrategy
 
 
 class ReplannerInput(BaseModel):

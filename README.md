@@ -4,13 +4,14 @@ Local travel assistant skeleton using LangGraph, LangChain, and MCP.
 
 ## Current Scope
 
-This is intentionally a minimal runnable skeleton:
+This is a local runnable prototype:
 
 - Pydantic schemas for user requests, trip plans, MCP results, and validation issues.
 - Structured traveler and accommodation requirements, including children who count as travelers but do not need separate beds.
-- LangGraph workflow with pre-plan MCP queries, plan-check MCP queries, validation, and replanning.
+- Structured route skeletons, route segments, accommodation stays, daily schedule blocks, and plan quality gates.
+- LangGraph workflow with city-route planning, pre-plan MCP queries, day schedule drafting, plan-check MCP queries, validation, repair strategy selection, and replanning.
 - Mock MCP stdio server scaffold plus optional Amap Maps MCP backend.
-- Local Streamlit UI with no login, database, or registration.
+- Local Streamlit UI with workflow streaming, log visualization, no login, database, or registration.
 
 ## Run
 
@@ -50,7 +51,8 @@ $env:TRAVEL_AGENT_USE_LLM="false"
 
 Current LLM-backed nodes:
 
-- `initial_plan`: generates a structured `TripPlan`.
+- `city_route_planner`: can generate a structured `CityRoutePlan`.
+- `draft_day_schedule`: generates a structured `TripPlan`.
 - `replan`: revises the current structured `TripPlan` based on validation issues.
 
 The query planners, MCP data collection, validation routing, and final markdown rendering remain deterministic Python nodes.
@@ -58,7 +60,8 @@ The query planners, MCP data collection, validation routing, and final markdown 
 In the Streamlit UI, the `LLM` checkbox only controls the two planning nodes:
 
 ```text
-initial_plan
+city_route_planner
+draft_day_schedule
 replan
 ```
 
@@ -119,6 +122,7 @@ Internal query mapping:
 get_weather                 -> maps_weather
 search_attractions          -> maps_text_search
 search_accommodation_areas  -> maps_text_search
+search_lodging_near_place   -> maps_geo + maps_around_search/maps_text_search
 get_attraction_detail       -> maps_text_search + maps_search_detail
 get_route_time              -> maps_geo + direction/distance tools
 ```
@@ -181,16 +185,18 @@ In this example, `total_people` is 3 for tickets, transport, food, and route int
 
 ```text
 parse_request
+  -> city_route_planner
   -> preplan_query_planner
   -> collect_preplan_mcp_data
-  -> initial_plan
+  -> draft_day_schedule
   -> plan_check_query_planner
   -> collect_plan_mcp_data
   -> validate_plan
-  -> replan or final_writer
+  -> repair_strategy_planner
+  -> replan, final_writer, or infeasible final output
 ```
 
-If validation finds `high` or `critical` issues and the loop has not reached `max_iterations`, `replan` sends the flow back to `plan_check_query_planner`.
+If validation finds `high` or `critical` issues and the loop has not reached `max_iterations`, `repair_strategy_planner` sends the flow to `replan`. If the maximum loop count is reached, the final output is marked provisional through `TripPlan.quality_gate`.
 
 ```text
 replan
@@ -217,6 +223,7 @@ get_route_time(origin, destination, mode)
 get_attraction_detail(name, date)
 search_attractions(city, preferences)
 search_accommodation_areas(city, budget_level, prefer_family_room)
+search_lodging_near_place(city, anchor_place, budget_level, prefer_family_room, radius_km)
 ```
 
 The mock data intentionally includes conflicts:
@@ -225,10 +232,11 @@ The mock data intentionally includes conflicts:
 - Museum visits on dates ending in `-02` return closed.
 - Routes between `West Lake` and a museum, or routes involving `Remote` / `Mountain`, return a long 150-minute transfer.
 - `search_attractions` returns both outdoor options and indoor rainy-day backups.
-- `search_accommodation_areas` returns area-level lodging options, not specific hotels.
+- `search_accommodation_areas` returns area-level fallback lodging options.
+- `search_lodging_near_place` returns concrete mock lodging tied to an attraction anchor, including a nearby option and a farther station-area fallback.
 
 ## Next Steps
 
-1. Replace deterministic node logic with LangChain LLM calls that still return the same Pydantic schemas.
-2. Replace remaining mock-only fields with richer Amap MCP result parsing.
-3. Add a Streamlit page after the backend loop is stable.
+1. Add a dedicated train/flight/ticket source; Amap MCP cannot provide reliable train numbers or ticket inventory.
+2. Improve city and region inference beyond the current deterministic rules for common Shanxi anchors.
+3. Add stronger LLM prompts and evaluation cases for multi-city itinerary repairs.

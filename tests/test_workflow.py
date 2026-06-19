@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, time
 
-from backend.agents.nodes import plan_check_query_planner_node, validate_plan_node
+from backend.agents.nodes import city_route_planner_node, plan_check_query_planner_node, validate_plan_node
 from backend.graph.workflow import build_workflow
 from backend.schemas.trip import (
     FinalPlan,
@@ -45,12 +45,17 @@ def test_workflow_replans_and_returns_final_plan() -> None:
     assert result["iteration"] >= 1
     assert result["plan_versions"]
     assert isinstance(result["current_plan"], TripPlan)
+    assert result["city_route_plan"].segments
+    assert result["current_plan"].route_segments
+    assert result["current_plan"].accommodations
+    assert all(day.schedule_blocks for day in result["current_plan"].days)
     assert all(isinstance(plan, TripPlan) for plan in result["plan_versions"])
     assert isinstance(result["mcp_results"], McpResults)
     assert result["mcp_results"].weather
     assert result["mcp_results"].attractions
     assert result["mcp_results"].routes
     assert result["mcp_results"].accommodation_areas
+    assert result["mcp_results"].lodging
     assert all(isinstance(issue, ValidationIssue) for issue in result["issues"])
     assert isinstance(result["final_plan"], FinalPlan)
     assert isinstance(result["pending_mcp_queries"], McpQueryPlan)
@@ -139,7 +144,27 @@ def test_validator_updates_transfer_duration_from_mcp_route_results() -> None:
     assert plan.days[0].start_transfer_to_first is not None
     assert plan.days[0].start_transfer_to_first.estimated_duration_minutes == 180
     assert result["issues"]
-    assert result["issues"][0].reason == "start transfer takes 180 minutes."
+    assert any(issue.reason == "start transfer takes 180 minutes." for issue in result["issues"])
+    assert any(issue.issue_type.value == "missing_return_transfer" for issue in result["issues"])
+
+
+def test_city_route_planner_adds_concrete_stay_and_return_segment() -> None:
+    request = TripRequest(
+        origin="Beijing",
+        destination="Shanxi",
+        start_date=date(2026, 7, 1),
+        end_date=date(2026, 7, 3),
+        travelers=3,
+        must_visit=["Wutai Mountain"],
+    )
+
+    result = city_route_planner_node({"user_request": request, "use_llm": False})
+    route = result["city_route_plan"]
+
+    assert route.stays[0].city == "忻州"
+    assert route.stays[0].lodging_anchor == "Wutai Mountain"
+    assert any(segment.segment_type.value == "outbound" for segment in route.segments)
+    assert any(segment.segment_type.value == "return" for segment in route.segments)
 
 
 def test_validator_accepts_normalized_must_visit_names() -> None:

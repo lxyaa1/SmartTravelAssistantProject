@@ -5,6 +5,7 @@ import json
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import streamlit as st
@@ -16,7 +17,7 @@ from backend.schemas.trip import McpResults, TripPlan, ValidationIssue
 
 st.set_page_config(page_title="TravelAgent", page_icon="T", layout="wide")
 LOG_DIR = Path("data/logs")
-UI_STATE_VERSION = 3
+UI_STATE_VERSION = 5
 
 
 def main() -> None:
@@ -149,16 +150,31 @@ def _run_workflow_streaming(
     status_box = progress_container.empty()
     plan_box = progress_container.empty()
     issue_box = progress_container.empty()
+    started_at = perf_counter()
+    last_event_at = started_at
 
     for index, update in enumerate(workflow.stream(initial_state, stream_mode="updates"), start=1):
         for node_name, node_state in update.items():
             if not isinstance(node_state, dict):
                 continue
+            now = perf_counter()
+            node_duration_seconds = now - last_event_at
+            elapsed_seconds = now - started_at
+            last_event_at = now
             latest_state = node_state
-            event = _workflow_event(index=index, node_name=node_name, state=node_state)
+            event = _workflow_event(
+                index=index,
+                node_name=node_name,
+                state=node_state,
+                node_duration_seconds=node_duration_seconds,
+                elapsed_seconds=elapsed_seconds,
+            )
             events.append(event)
             _append_log(log_path, event)
-            status_box.info(f"{event['step']}. {event['node']}: {event['summary']}")
+            status_box.info(
+                f"{event['step']}. {event['node']}: {event['summary']} "
+                f"({event['node_duration_seconds']:.2f}s)"
+            )
             if node_state.get("current_plan"):
                 with plan_box.container():
                     st.caption("\u5f53\u524d\u8ba1\u5212")
@@ -194,6 +210,8 @@ def _render_result(result: dict[str, Any]) -> None:
         with st.expander("MCP \u8b66\u544a", expanded=True):
             for error in mcp_errors:
                 st.warning(error)
+    if not plan.quality_gate.can_finalize:
+        st.warning(plan.quality_gate.reason)
 
     itinerary_tab, issues_tab, mcp_tab, log_tab, final_tab = st.tabs(
         ["\u884c\u7a0b", "\u95ee\u9898", "MCP \u6570\u636e", "\u884c\u52a8\u65e5\u5fd7", "\u6700\u7ec8\u6587\u672c"]
@@ -212,12 +230,79 @@ def _render_result(result: dict[str, Any]) -> None:
 
 def _render_itinerary(plan: TripPlan) -> None:
     st.subheader(plan.title)
+    if plan.route_segments:
+        st.markdown("### \u51fa\u884c\u8def\u7ebf")
+        st.dataframe(
+            [
+                {
+                    "\u987a\u5e8f": segment.sequence,
+                    "\u7c7b\u578b": segment.segment_type.value,
+                    "\u51fa\u53d1": segment.origin,
+                    "\u5230\u8fbe": segment.destination,
+                    "\u4ea4\u901a": segment.mode.value,
+                    "\u51fa\u53d1\u65f6\u95f4": _format_date_time(segment.departure_date, segment.departure_time),
+                    "\u5230\u8fbe\u65f6\u95f4": _format_date_time(segment.arrival_date, segment.arrival_time),
+                    "\u8017\u65f6\u5206\u949f": segment.estimated_duration_minutes,
+                    "\u8ddd\u79bbkm": segment.estimated_distance_km,
+                    "\u73ed\u6b21": segment.train_or_flight_number or "\u5f85\u8ba2\u7968\u6e90\u786e\u8ba4",
+                    "\u5907\u6ce8": segment.booking_notes or segment.notes,
+                }
+                for segment in plan.route_segments
+            ],
+            hide_index=True,
+            use_container_width=True,
+        )
+    if plan.accommodations:
+        st.markdown("### \u4f4f\u5bbf")
+        st.dataframe(
+            [
+                {
+                    "\u9152\u5e97/\u6c11\u5bbf": stay.hotel_name,
+                    "\u57ce\u5e02": stay.city,
+                    "\u533a\u57df": stay.area,
+                    "\u5730\u5740": stay.address,
+                    "\u5165\u4f4f": stay.check_in_date.isoformat(),
+                    "\u79bb\u5e97": stay.check_out_date.isoformat(),
+                    "\u5e8a\u4f4d": stay.bed_count,
+                    "\u9760\u8fd1": ", ".join(stay.nearby_anchor_places),
+                    "\u539f\u56e0": stay.reason,
+                }
+                for stay in plan.accommodations
+            ],
+            hide_index=True,
+            use_container_width=True,
+        )
     for day in plan.days:
         st.markdown(f"### Day {day.day} - {day.date} - {day.city}")
+        if day.schedule_blocks:
+            st.dataframe(
+                [
+                    {
+                        "\u987a\u5e8f": block.sequence,
+                        "\u65f6\u95f4": f"{block.start_time.strftime('%H:%M')}-{block.end_time.strftime('%H:%M')}",
+                        "\u7c7b\u578b": block.block_type.value,
+                        "\u5185\u5bb9": block.title,
+                        "\u5730\u70b9": block.place_name or "",
+                        "\u4ea4\u901a": (
+                            f"{block.transfer.origin} -> {block.transfer.destination}"
+                            if block.transfer
+                            else ""
+                        ),
+                        "\u4ea4\u901a\u65b9\u5f0f": block.transfer.mode.value if block.transfer else "",
+                        "\u8017\u65f6\u5206\u949f": block.transfer.estimated_duration_minutes if block.transfer else "",
+                        "\u8d39\u7528": block.estimated_cost,
+                        "\u5907\u6ce8": block.notes,
+                    }
+                    for block in day.schedule_blocks
+                ],
+                hide_index=True,
+                use_container_width=True,
+            )
         rows = []
         arrival_transfer = getattr(day, "arrival_transfer", None)
         start_transfer = getattr(day, "start_transfer_to_first", None)
         return_transfer = getattr(day, "return_transfer_to_accommodation", None)
+        departure_transfer = getattr(day, "departure_transfer", None)
         if arrival_transfer:
             rows.append(_transfer_row("\u5230\u8fbe", arrival_transfer))
         if start_transfer:
@@ -240,7 +325,11 @@ def _render_itinerary(plan: TripPlan) -> None:
             )
         if return_transfer:
             rows.append(_transfer_row("\u8fd4\u56de\u4f4f\u5bbf", return_transfer))
-        st.dataframe(rows, hide_index=True, use_container_width=True)
+        if departure_transfer:
+            rows.append(_transfer_row("\u8fd4\u7a0b", departure_transfer))
+        if rows:
+            with st.expander("\u8bbf\u95ee\u70b9\u548c\u63a5\u9a73\u660e\u7ec6", expanded=not day.schedule_blocks):
+                st.dataframe(rows, hide_index=True, use_container_width=True)
         if day.accommodation_area:
             st.caption(f"\u4f4f\u5bbf\u533a\u57df\uff1a{day.accommodation_area}")
         if day.daily_notes:
@@ -256,8 +345,8 @@ def _render_issues(issues: list[ValidationIssue]) -> None:
 
 
 def _render_mcp_results(mcp_results: McpResults) -> None:
-    weather_tab, attraction_tab, route_tab, area_tab = st.tabs(
-        ["\u5929\u6c14", "\u666f\u70b9", "\u8def\u7ebf", "\u4f4f\u5bbf\u533a\u57df"]
+    weather_tab, attraction_tab, route_tab, area_tab, lodging_tab = st.tabs(
+        ["\u5929\u6c14", "\u666f\u70b9", "\u8def\u7ebf", "\u4f4f\u5bbf\u533a\u57df", "\u4f4f\u5bbf\u5019\u9009"]
     )
     with weather_tab:
         st.dataframe([item.model_dump(mode="json") for item in mcp_results.weather], hide_index=True, use_container_width=True)
@@ -268,6 +357,12 @@ def _render_mcp_results(mcp_results: McpResults) -> None:
     with area_tab:
         st.dataframe(
             [item.model_dump(mode="json") for item in mcp_results.accommodation_areas],
+            hide_index=True,
+            use_container_width=True,
+        )
+    with lodging_tab:
+        st.dataframe(
+            [item.model_dump(mode="json") for item in _mcp_lodging(mcp_results)],
             hide_index=True,
             use_container_width=True,
         )
@@ -284,6 +379,7 @@ def _render_plan_snapshot(plan: TripPlan) -> None:
                 "\u4f4f\u5bbf": day.accommodation_area or "",
                 "\u666f\u70b9": " -> ".join(visit.place_name for visit in day.visits),
                 "\u4ea4\u901a\u5206\u949f": day.total_transport_minutes,
+                "\u7761\u7720\u5206\u949f": getattr(day, "sleep_minutes", 0),
                 "\u8d39\u7528": day.estimated_cost,
             }
         )
@@ -307,7 +403,10 @@ def _render_event_log() -> None:
             "iteration": event.get("iteration"),
             "pending_queries": event.get("pending_queries"),
             "issues": event.get("issues"),
+            "node_seconds": event.get("node_duration_seconds"),
+            "elapsed_seconds": event.get("elapsed_seconds"),
             "routes": len(event.get("mcp_results", {}).get("routes", [])),
+            "lodging": len(event.get("mcp_results", {}).get("lodging", [])),
         }
         for event in events
     ]
@@ -341,7 +440,10 @@ def _render_log_file_viewer() -> None:
             "node": event.get("node"),
             "summary": event.get("summary"),
             "issues": event.get("issues"),
+            "node_seconds": event.get("node_duration_seconds"),
+            "elapsed_seconds": event.get("elapsed_seconds"),
             "routes": len(event.get("mcp_results", {}).get("routes", [])),
+            "lodging": len(event.get("mcp_results", {}).get("lodging", [])),
             "transfers": len(event.get("plan_transfers", [])),
         }
         for event in events
@@ -356,17 +458,26 @@ def _render_log_file_viewer() -> None:
     plan = final_event.get("current_plan", {})
     issues = final_event.get("issues_detail", [])
     routes = final_event.get("mcp_results", {}).get("routes", [])
+    lodging = final_event.get("mcp_results", {}).get("lodging", [])
     transfers = final_event.get("plan_transfers", [])
+    route_segments = final_event.get("plan_route_segments", [])
+    accommodations = final_event.get("plan_accommodations", [])
 
-    plan_tab, transfer_tab, route_tab, issue_tab, raw_tab = st.tabs(
-        ["\u8ba1\u5212", "\u4ea4\u901a\u6bb5", "MCP \u8def\u7ebf", "\u95ee\u9898", "\u539f\u59cb JSON"]
+    plan_tab, route_segment_tab, accommodation_tab, transfer_tab, route_tab, lodging_tab, issue_tab, raw_tab = st.tabs(
+        ["\u8ba1\u5212", "\u8def\u7ebf\u9aa8\u67b6", "\u4f4f\u5bbf", "\u4ea4\u901a\u6bb5", "MCP \u8def\u7ebf", "MCP \u4f4f\u5bbf", "\u95ee\u9898", "\u539f\u59cb JSON"]
     )
     with plan_tab:
         _render_log_plan(plan)
+    with route_segment_tab:
+        _render_json_rows(route_segments, "\u65e0\u8def\u7ebf\u9aa8\u67b6")
+    with accommodation_tab:
+        _render_json_rows(accommodations, "\u65e0\u4f4f\u5bbf\u8bb0\u5f55")
     with transfer_tab:
         _render_json_rows(transfers, "\u65e0\u4ea4\u901a\u6bb5\u8bb0\u5f55")
     with route_tab:
         _render_json_rows(routes, "\u65e0 MCP \u8def\u7ebf\u7ed3\u679c")
+    with lodging_tab:
+        _render_json_rows(lodging, "\u65e0 MCP \u4f4f\u5bbf\u5019\u9009")
     with issue_tab:
         _render_json_rows(issues, "\u65e0\u95ee\u9898")
     with raw_tab:
@@ -377,6 +488,7 @@ def _render_log_plan(plan: dict[str, Any]) -> None:
     st.caption(f"{plan.get('title', '')} | {plan.get('origin', '')} -> {plan.get('destination', '')}")
     day_rows = []
     visit_rows = []
+    schedule_rows = []
     for day in plan.get("days", []):
         day_rows.append(
             {
@@ -385,9 +497,28 @@ def _render_log_plan(plan: dict[str, Any]) -> None:
                 "city": day.get("city"),
                 "hotel": day.get("accommodation_area"),
                 "transport_minutes": day.get("total_transport_minutes"),
+                "sleep_minutes": day.get("sleep_minutes"),
                 "cost": day.get("estimated_cost"),
             }
         )
+        for block in day.get("schedule_blocks", []):
+            transfer = block.get("transfer") or {}
+            schedule_rows.append(
+                {
+                    "day": day.get("day"),
+                    "date": day.get("date"),
+                    "time": f"{block.get('start_time')} - {block.get('end_time')}",
+                    "type": block.get("block_type"),
+                    "title": block.get("title"),
+                    "place": block.get("place_name") or "",
+                    "transfer": (
+                        f"{transfer.get('origin')} -> {transfer.get('destination')}"
+                        if transfer
+                        else ""
+                    ),
+                    "minutes": transfer.get("estimated_duration_minutes", ""),
+                }
+            )
         for visit in day.get("visits", []):
             visit_rows.append(
                 {
@@ -402,7 +533,12 @@ def _render_log_plan(plan: dict[str, Any]) -> None:
                 }
             )
     st.dataframe(day_rows, hide_index=True, use_container_width=True)
-    st.dataframe(visit_rows, hide_index=True, use_container_width=True)
+    if schedule_rows:
+        st.caption("\u65f6\u95f4\u5757")
+        st.dataframe(schedule_rows, hide_index=True, use_container_width=True)
+    if visit_rows:
+        st.caption("\u8bbf\u95ee\u70b9")
+        st.dataframe(visit_rows, hide_index=True, use_container_width=True)
 
 
 def _render_json_rows(rows: list[dict[str, Any]], empty_message: str) -> None:
@@ -452,6 +588,16 @@ def _transfer_row(label: str, transfer) -> dict[str, Any]:
     }
 
 
+def _format_date_time(day_value, time_value) -> str:
+    if day_value and time_value:
+        return f"{day_value} {time_value.strftime('%H:%M') if hasattr(time_value, 'strftime') else time_value}"
+    if day_value:
+        return str(day_value)
+    if time_value:
+        return time_value.strftime("%H:%M") if hasattr(time_value, "strftime") else str(time_value)
+    return ""
+
+
 def _new_log_path() -> Path:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -463,7 +609,13 @@ def _append_log(path: Path, event: dict[str, Any]) -> None:
         file.write(json.dumps(event, ensure_ascii=False) + "\n")
 
 
-def _workflow_event(index: int, node_name: str, state: dict[str, Any]) -> dict[str, Any]:
+def _workflow_event(
+    index: int,
+    node_name: str,
+    state: dict[str, Any],
+    node_duration_seconds: float = 0.0,
+    elapsed_seconds: float = 0.0,
+) -> dict[str, Any]:
     query_plan = state.get("pending_mcp_queries")
     issues = state.get("issues", [])
     plan = state.get("current_plan")
@@ -475,6 +627,8 @@ def _workflow_event(index: int, node_name: str, state: dict[str, Any]) -> dict[s
         "step": index,
         "node": node_name,
         "summary": _summarize_state(node_name, state),
+        "node_duration_seconds": round(node_duration_seconds, 4),
+        "elapsed_seconds": round(elapsed_seconds, 4),
         "iteration": state.get("iteration", 0),
         "pending_queries": len(query_plan.queries) if query_plan else 0,
         "issues": len(issues),
@@ -486,11 +640,18 @@ def _workflow_event(index: int, node_name: str, state: dict[str, Any]) -> dict[s
         event["raw_user_input"] = _to_jsonable(state["raw_user_input"])
     if state.get("user_request"):
         event["user_request"] = _to_jsonable(state["user_request"])
+    if state.get("city_route_plan"):
+        event["city_route_plan"] = _to_jsonable(state["city_route_plan"])
+    if state.get("repair_strategy"):
+        event["repair_strategy"] = _to_jsonable(state["repair_strategy"])
     if query_plan:
         event["pending_mcp_queries_detail"] = _to_jsonable(query_plan)
     if plan:
         event["current_plan"] = _to_jsonable(plan)
         event["plan_transfers"] = _extract_plan_transfers(plan)
+        event["plan_route_segments"] = _to_jsonable(plan.route_segments)
+        event["plan_accommodations"] = _to_jsonable(plan.accommodations)
+        event["quality_gate"] = _to_jsonable(plan.quality_gate)
     if mcp_results:
         event["mcp_results"] = _to_jsonable(mcp_results)
     if issues:
@@ -514,13 +675,19 @@ def _summarize_state(node_name: str, state: dict[str, Any]) -> str:
         results = state.get("mcp_results", McpResults())
         return (
             f"weather={len(results.weather)}, attractions={len(results.attractions)}, "
-            f"routes={len(results.routes)}, areas={len(results.accommodation_areas)}"
+            f"routes={len(results.routes)}, areas={len(results.accommodation_areas)}, lodging={len(_mcp_lodging(results))}"
         )
-    if node_name in {"initial_plan", "replan"} and state.get("current_plan"):
+    if node_name in {"draft_day_schedule", "initial_plan", "replan"} and state.get("current_plan"):
         plan = state["current_plan"]
         return f"{len(plan.days)} days, cost {plan.total_estimated_cost:.0f} {plan.currency}"
     if node_name == "validate_plan":
         return f"found {len(state.get('issues', []))} issues"
+    if node_name == "city_route_planner" and state.get("city_route_plan"):
+        route = state["city_route_plan"]
+        return f"{len(route.stays)} stays, {len(route.segments)} route segments"
+    if node_name == "repair_strategy_planner" and state.get("repair_strategy"):
+        strategy = state["repair_strategy"]
+        return f"{strategy.action.value}: {strategy.reason}"
     if node_name == "final_writer":
         return "final plan rendered"
     return "completed"
@@ -528,17 +695,36 @@ def _summarize_state(node_name: str, state: dict[str, Any]) -> str:
 
 def _extract_plan_transfers(plan: TripPlan) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    for segment in plan.route_segments:
+        rows.append(
+            {
+                "day": "",
+                "date": segment.departure_date.isoformat() if segment.departure_date else "",
+                "label": f"route_{segment.segment_type.value}",
+                "origin": segment.origin,
+                "destination": segment.destination,
+                "mode": segment.mode.value,
+                "duration_minutes": segment.estimated_duration_minutes,
+                "distance_km": segment.estimated_distance_km,
+                "cost": segment.estimated_cost,
+                "notes": segment.notes or segment.booking_notes,
+            }
+        )
     for day in plan.days:
         for label, transfer in (
             ("arrival", getattr(day, "arrival_transfer", None)),
             ("hotel_to_first", getattr(day, "start_transfer_to_first", None)),
             ("last_to_hotel", getattr(day, "return_transfer_to_accommodation", None)),
+            ("departure", getattr(day, "departure_transfer", None)),
         ):
             if transfer:
                 rows.append(_transfer_log_row(day.day, day.date.isoformat(), label, transfer))
         for visit in day.visits:
             if visit.transport_to_next:
                 rows.append(_transfer_log_row(day.day, day.date.isoformat(), "between_visits", visit.transport_to_next))
+        for block in getattr(day, "schedule_blocks", []):
+            if block.transfer:
+                rows.append(_transfer_log_row(day.day, day.date.isoformat(), f"block_{block.block_type.value}", block.transfer))
     return rows
 
 
@@ -569,6 +755,16 @@ def _to_jsonable(value: Any) -> Any:
     if isinstance(value, (date, datetime)):
         return value.isoformat()
     return value
+
+
+def _mcp_lodging(mcp_results: Any) -> list[Any]:
+    value = getattr(mcp_results, "lodging", None)
+    if value is None:
+        if isinstance(mcp_results, dict):
+            raw_value = mcp_results.get("lodging", [])
+            return raw_value if isinstance(raw_value, list) else []
+        return []
+    return value if isinstance(value, list) else []
 
 
 def _parse_text_list(value: str) -> list[str]:

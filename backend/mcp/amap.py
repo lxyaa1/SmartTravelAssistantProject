@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import re
 from datetime import date as Date
@@ -12,6 +13,7 @@ from backend.schemas.trip import (
     AccommodationAreaResult,
     AttractionResult,
     BudgetLevel,
+    LodgingResult,
     McpQuery,
     McpQueryPlan,
     McpResults,
@@ -29,6 +31,11 @@ CITY_ALIASES = {
     "beijing": "\u5317\u4eac",
     "suzhou": "\u82cf\u5dde",
     "nanjing": "\u5357\u4eac",
+    "shanxi": "\u5c71\u897f",
+    "taiyuan": "\u592a\u539f",
+    "xinzhou": "\u5ffb\u5dde",
+    "datong": "\u5927\u540c",
+    "jinzhong": "\u664b\u4e2d",
 }
 
 PLACE_ALIASES = {
@@ -36,6 +43,11 @@ PLACE_ALIASES = {
     "hangzhou museum": "\u676d\u5dde\u535a\u7269\u9986",
     "hangzhou art gallery": "\u6d59\u6c5f\u7f8e\u672f\u9986",
     "hangzhou tea house": "\u9752\u85e4\u8336\u9986",
+    "wutai mountain": "\u4e94\u53f0\u5c71\u98ce\u666f\u540d\u80dc\u533a",
+    "yungang grottoes": "\u4e91\u5188\u77f3\u7a9f",
+    "yungang grotto": "\u4e91\u5188\u77f3\u7a9f",
+    "pingyao ancient city": "\u5e73\u9065\u53e4\u57ce",
+    "jinci temple": "\u664b\u7960\u535a\u7269\u9986",
 }
 
 
@@ -126,13 +138,48 @@ async def _execute_amap_mcp_query(
         )
         return McpResults(accommodation_areas=_parse_pois_as_accommodation_areas(raw, city=city))
 
+    if query.tool_name == McpToolName.SEARCH_LODGING_NEAR_PLACE:
+        city = str(args["city"])
+        anchor_place = str(args.get("anchor_place", city))
+        radius_km = float(args.get("radius_km", 5))
+        anchor_location = await _geocode(tools, anchor_place, city)
+        keyword = "\u9152\u5e97 \u6c11\u5bbf"
+        raw = None
+        if "maps_around_search" in tools:
+            raw = await tools["maps_around_search"].ainvoke(
+                {
+                    "keywords": keyword,
+                    "location": anchor_location,
+                    "radius": str(int(radius_km * 1000)),
+                    "strategy": 0,
+                }
+            )
+        else:
+            raw = await tools["maps_text_search"].ainvoke(
+                {
+                    "keywords": f"{anchor_place} {keyword}",
+                    "city": _query_city(city),
+                    "citylimit": True,
+                }
+            )
+        return McpResults(
+            lodging=_parse_pois_as_lodging_results(
+                raw=raw,
+                city=city,
+                anchor_place=anchor_place,
+                anchor_location=anchor_location,
+                budget_level=BudgetLevel(str(args.get("budget_level", BudgetLevel.MEDIUM.value))),
+            )
+        )
+
     if query.tool_name == McpToolName.GET_ATTRACTION_DETAIL:
         name = str(args["name"])
+        city = str(args.get("city", default_city))
         query_date = _parse_date(str(args["date"]))
         search_raw = await tools["maps_text_search"].ainvoke(
             {
-                "keywords": _query_place(name, city=default_city),
-                "city": _query_city(default_city),
+                "keywords": _query_place(name, city=city),
+                "city": _query_city(city),
                 "citylimit": True,
             }
         )
@@ -147,7 +194,7 @@ async def _execute_amap_mcp_query(
             attractions=[
                 _parse_attraction_detail(
                     fallback_name=name,
-                    city=default_city,
+                    city=city,
                     query_date=query_date,
                     poi=poi,
                     detail_raw=detail_raw or search_raw,
@@ -241,6 +288,35 @@ def _parse_pois_as_accommodation_areas(raw: Any, city: str) -> list[Accommodatio
                 cons=[],
                 suitable_for=["travelers"],
                 estimated_price_level=BudgetLevel.MEDIUM,
+                notes=_compact_raw(poi),
+            )
+        )
+    return results
+
+
+def _parse_pois_as_lodging_results(
+    raw: Any,
+    city: str,
+    anchor_place: str,
+    anchor_location: str,
+    budget_level: BudgetLevel,
+) -> list[LodgingResult]:
+    results: list[LodgingResult] = []
+    for poi in _extract_pois(raw)[:8]:
+        name = _first_text(poi.get("name"))
+        if not name:
+            continue
+        location = _first_text(poi.get("location"))
+        results.append(
+            LodgingResult(
+                name=name,
+                city=city,
+                area=_first_text(poi.get("adname")) or _first_text(poi.get("business_area")),
+                address=_first_text(poi.get("address")),
+                location=location,
+                anchor_place=anchor_place,
+                distance_to_anchor_km=_distance_between_locations_km(anchor_location, location),
+                estimated_price_level=budget_level,
                 notes=_compact_raw(poi),
             )
         )
@@ -536,6 +612,29 @@ def _looks_like_location(value: str) -> bool:
     return bool(re.fullmatch(r"\s*\d+(?:\.\d+)?,\s*\d+(?:\.\d+)?\s*", value))
 
 
+def _distance_between_locations_km(origin: str, destination: str) -> float:
+    origin_pair = _parse_location_pair(origin)
+    destination_pair = _parse_location_pair(destination)
+    if origin_pair is None or destination_pair is None:
+        return 0
+    lon1, lat1 = origin_pair
+    lon2, lat2 = destination_pair
+    # Equirectangular approximation is sufficient for ranking nearby POIs.
+    avg_lat = (lat1 + lat2) / 2
+    km_per_lat = 111.32
+    km_per_lon = 111.32 * max(0.1, abs(math.cos(math.radians(avg_lat))))
+    dx = (lon2 - lon1) * km_per_lon
+    dy = (lat2 - lat1) * km_per_lat
+    return round((dx * dx + dy * dy) ** 0.5, 2)
+
+
+def _parse_location_pair(value: str) -> tuple[float, float] | None:
+    if not _looks_like_location(value):
+        return None
+    lon_text, lat_text = [part.strip() for part in value.split(",", 1)]
+    return float(lon_text), float(lat_text)
+
+
 def _query_city(city: str) -> str:
     return CITY_ALIASES.get(city.strip().lower(), city)
 
@@ -582,9 +681,20 @@ def _merge_results(existing: McpResults, incoming: McpResults) -> McpResults:
     accommodation_areas = {(item.area_name, item.city): item for item in existing.accommodation_areas}
     accommodation_areas.update({(item.area_name, item.city): item for item in incoming.accommodation_areas})
 
+    lodging = {(item.name, item.city, item.anchor_place): item for item in _mcp_lodging(existing)}
+    lodging.update({(item.name, item.city, item.anchor_place): item for item in _mcp_lodging(incoming)})
+
     return McpResults(
         weather=list(weather.values()),
         attractions=list(attractions.values()),
         routes=list(routes.values()),
         accommodation_areas=list(accommodation_areas.values()),
+        lodging=list(lodging.values()),
     )
+
+
+def _mcp_lodging(mcp_results: McpResults | object) -> list[LodgingResult]:
+    value = getattr(mcp_results, "lodging", None)
+    if value is None:
+        return []
+    return value if isinstance(value, list) else []
