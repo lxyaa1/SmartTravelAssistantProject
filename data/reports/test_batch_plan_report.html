@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TravelAgent Batch Report</title>
+
+<style>
+:root { color-scheme: light; font-family: Arial, "Microsoft YaHei", sans-serif; }
+body { margin: 0; background: #f5f6f8; color: #20242a; }
+main { max-width: 1280px; margin: 0 auto; padding: 24px; }
+header { margin-bottom: 18px; }
+h1 { margin: 0 0 8px; font-size: 28px; }
+h2 { margin: 0 0 14px; font-size: 21px; }
+h3 { margin: 18px 0 8px; font-size: 16px; }
+.panel { background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; padding: 18px; margin: 16px 0; }
+.error-panel { border-color: #d64545; }
+.metrics { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px; margin: 12px 0; }
+.metrics div { border: 1px solid #dfe3e8; border-radius: 6px; padding: 10px; background: #fafbfc; }
+.metrics b { display: block; font-size: 18px; margin-bottom: 4px; }
+.metrics span, .muted { color: #69707a; }
+.quality { border-left: 4px solid #7c8798; padding-left: 10px; color: #414852; }
+.badge { display: inline-block; min-width: 72px; text-align: center; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.badge.ok { background: #dcfce7; color: #166534; }
+.badge.blocked { background: #fef3c7; color: #92400e; }
+.badge.error { background: #fee2e2; color: #991b1b; }
+table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 13px; }
+th, td { border: 1px solid #dfe3e8; padding: 7px 8px; vertical-align: top; }
+th { background: #f0f2f5; text-align: left; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #111827; color: #f9fafb; border-radius: 6px; padding: 12px; font-size: 12px; }
+details { margin: 10px 0; }
+summary { cursor: pointer; font-weight: 700; margin-bottom: 8px; }
+a { color: #195bd8; }
+@media (max-width: 900px) { .metrics { grid-template-columns: repeat(2, minmax(120px, 1fr)); } main { padding: 14px; } }
+</style>
+
+</head>
+<body>
+<main>
+<header>
+<h1>TravelAgent 批量规划测试报告</h1>
+<p>生成时间：2026-06-22T17:20:01 | MCP：mock | LLM：False | 最大重规划：1</p>
+</header>
+<section class="panel"><h2>总览</h2><table><thead><tr><th>案例</th><th>状态</th><th>问题</th><th>MCP 错误</th><th>路线</th><th>耗时</th></tr></thead><tbody><tr><td><a href="#case-1">Shanghai family Hangzhou weekend</a></td><td><span class="badge blocked">BLOCKED</span></td><td>5</td><td>0</td><td>9</td><td>0.0s</td></tr><tr><td><a href="#case-2">Beijing to Shanxi Wutai Mountain</a></td><td><span class="badge blocked">BLOCKED</span></td><td>9</td><td>0</td><td>5</td><td>0.0s</td></tr><tr><td><a href="#case-3">Shanghai to Suzhou culture day</a></td><td><span class="badge blocked">BLOCKED</span></td><td>5</td><td>0</td><td>5</td><td>0.0s</td></tr></tbody></table></section>
+<section id="case-1" class="panel"><h2>Shanghai family Hangzhou weekend</h2><div class="metrics"><div><b>不可最终化</b><span>质量门禁</span></div><div><b>5</b><span>问题</span></div><div><b>0</b><span>MCP 错误</span></div><div><b>9</b><span>路线结果</span></div><div><b>0.0s</b><span>耗时</span></div></div><p class="quality">High or critical validation issues remain; final output is provisional.</p><details open><summary>问题列表</summary><table><thead><tr><th>严重度</th><th>类型</th><th>Day</th><th>地点</th><th>原因</th><th>建议</th></tr></thead><tbody><tr><td>high</td><td>infeasible_plan</td><td>1</td><td>Shanghai, Hangzhou</td><td>Cross-city route result is suspicious: Shanghai -&gt; Hangzhou is only 8.0 km.</td><td>Re-query route with explicit origin_city and destination_city, then rebuild this transfer.</td></tr><tr><td>medium</td><td>incomplete_day_timeline</td><td>3</td><td>Hangzhou</td><td>Timeline covers only 590 minutes of the day.</td><td>Add sleep, meals, moves, rest, and buffers until the day is approximately covered.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>3</td><td>Hangzhou, Shanghai</td><td>Cross-city route result is suspicious: Hangzhou -&gt; Shanghai is only 8.0 km.</td><td>Re-query route with explicit origin_city and destination_city, then rebuild this transfer.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>1</td><td>Hangzhou, West Lake Nearby Hotel</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>3</td><td>West Lake Nearby Hotel, Hangzhou</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr></tbody></table></details><details><summary>MCP 错误</summary><p class="muted">无。</p></details><details><summary>Cache 统计</summary><pre>{
+  &quot;hits&quot;: 0,
+  &quot;misses&quot;: 19,
+  &quot;last_hits&quot;: 0,
+  &quot;last_misses&quot;: 4,
+  &quot;entries&quot;: 19
+}</pre></details><details><summary>路线骨架</summary><table><thead><tr><th>#</th><th>类型</th><th>路线</th><th>交通</th><th>分钟</th><th>km</th><th>备注</th></tr></thead><tbody><tr><td>1</td><td>outbound</td><td>Shanghai -> Hangzhou</td><td>train</td><td>35</td><td>8.0</td><td>Updated from MCP route data.</td></tr><tr><td>2</td><td>return</td><td>Hangzhou -> Shanghai</td><td>train</td><td>35</td><td>8.0</td><td>Updated from MCP route data.</td></tr></tbody></table></details><details open><summary>每日时间线</summary><h3>Day 1 | 2026-07-01 | Hangzhou</h3><p class="muted">住宿：West Lake Nearby Hotel</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>Shanghai</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>Shanghai</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>08:15:00 - 08:50:00</td><td>move</td><td>outbound</td><td>Shanghai -&gt; Hangzhou</td><td>train</td><td>35</td><td>8.0</td></tr><tr><td>4</td><td>08:50:00 - 09:35:00</td><td>stay</td><td>meal</td><td>Hangzhou</td><td></td><td>45</td><td></td></tr><tr><td>5</td><td>13:00:00 - 13:30:00</td><td>stay</td><td>hotel_checkin</td><td>West Lake Nearby Hotel</td><td></td><td>30</td><td></td></tr><tr><td>6</td><td>14:00:00 - 14:35:00</td><td>move</td><td>local</td><td>West Lake Nearby Hotel -&gt; Hangzhou Art Gallery</td><td>taxi</td><td>35</td><td>8.0</td></tr><tr><td>7</td><td>14:35:00 - 16:35:00</td><td>stay</td><td>visit</td><td>Hangzhou Art Gallery</td><td></td><td>120</td><td></td></tr><tr><td>8</td><td>16:35:00 - 17:10:00</td><td>move</td><td>local</td><td>Hangzhou Art Gallery -&gt; Hangzhou Art Gallery</td><td>taxi</td><td>35</td><td>8.0</td></tr><tr><td>9</td><td>17:10:00 - 17:30:00</td><td>stay</td><td>visit</td><td>Hangzhou Art Gallery</td><td></td><td>20</td><td></td></tr><tr><td>10</td><td>17:30:00 - 18:05:00</td><td>move</td><td>local</td><td>Hangzhou Art Gallery -&gt; West Lake Nearby Hotel</td><td>taxi</td><td>35</td><td>8.0</td></tr><tr><td>11</td><td>18:05:00 - 18:30:00</td><td>stay</td><td>rest</td><td>West Lake Nearby Hotel</td><td></td><td>25</td><td></td></tr><tr><td>12</td><td>18:30:00 - 19:30:00</td><td>stay</td><td>meal</td><td>West Lake Nearby Hotel</td><td></td><td>60</td><td></td></tr><tr><td>13</td><td>19:30:00 - 22:30:00</td><td>stay</td><td>rest</td><td>West Lake Nearby Hotel</td><td></td><td>180</td><td></td></tr><tr><td>14</td><td>22:30:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>West Lake Nearby Hotel</td><td></td><td>89</td><td></td></tr></tbody></table>
+<h3>Day 2 | 2026-07-02 | Hangzhou</h3><p class="muted">住宿：West Lake Nearby Hotel</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>West Lake Nearby Hotel</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>West Lake Nearby Hotel</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>09:00:00 - 09:35:00</td><td>move</td><td>local</td><td>West Lake Nearby Hotel -&gt; West Lake</td><td>taxi</td><td>35</td><td>8.0</td></tr><tr><td>4</td><td>09:35:00 - 11:35:00</td><td>stay</td><td>visit</td><td>West Lake</td><td></td><td>120</td><td></td></tr><tr><td>5</td><td>11:35:00 - 12:10:00</td><td>move</td><td>local</td><td>West Lake -&gt; West Lake</td><td>taxi</td><td>35</td><td>8.0</td></tr><tr><td>6</td><td>12:10:00 - 14:10:00</td><td>stay</td><td>visit</td><td>West Lake</td><td></td><td>120</td><td></td></tr><tr><td>7</td><td>14:10:00 - 14:45:00</td><td>move</td><td>local</td><td>West Lake -&gt; West Lake Nearby Hotel</td><td>taxi</td><td>35</td><td>8.0</td></tr><tr><td>8</td><td>14:45:00 - 18:30:00</td><td>stay</td><td>rest</td><td>West Lake Nearby Hotel</td><td></td><td>225</td><td></td></tr><tr><td>9</td><td>18:30:00 - 19:30:00</td><td>stay</td><td>meal</td><td>West Lake Nearby Hotel</td><td></td><td>60</td><td></td></tr><tr><td>10</td><td>19:30:00 - 22:30:00</td><td>stay</td><td>rest</td><td>West Lake Nearby Hotel</td><td></td><td>180</td><td></td></tr><tr><td>11</td><td>22:30:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>West Lake Nearby Hotel</td><td></td><td>89</td><td></td></tr></tbody></table>
+<h3>Day 3 | 2026-07-03 | Hangzhou</h3><p class="muted">住宿：West Lake Nearby Hotel</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>West Lake Nearby Hotel</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>West Lake Nearby Hotel</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>17:00:00 - 17:35:00</td><td>move</td><td>return</td><td>Hangzhou -&gt; Shanghai</td><td>train</td><td>35</td><td>8.0</td></tr><tr><td>4</td><td>17:35:00 - 18:35:00</td><td>stay</td><td>rest</td><td>Shanghai</td><td></td><td>60</td><td></td></tr></tbody></table></details><details><summary>最终文本</summary><pre># Shanghai to Hangzhou travel plan
+
+Shanghai -&gt; Hangzhou
+
+## 状态
+
+当前计划还不能作为可执行行程使用，因为仍有必须解决的校验问题。
+High or critical validation issues remain; final output is provisional.
+
+## Route Skeleton
+
+- outbound: Shanghai -&gt; Hangzhou by train, 2026-07-01 08:00 to 2026-07-01 08:35, 35 min
+- return: Hangzhou -&gt; Shanghai by train, 2026-07-03 17:00 to 2026-07-03 17:35, 35 min
+
+## Accommodation
+
+- Hangzhou: West Lake Nearby Hotel, 2026-07-01 to 2026-07-04, near West Lake
+
+## Day 1 - 2026-07-01 - Hangzhou
+Accommodation area: West Lake Nearby Hotel
+- 00:00-07:30 STAY Shanghai (sleep), 450 min
+- 07:30-08:15 STAY Shanghai (meal), 45 min
+- 08:15-08:50 MOVE Shanghai -&gt; Hangzhou by train, 35 min
+- 08:50-09:35 STAY Hangzhou (meal), 45 min
+- 13:00-13:30 STAY West Lake Nearby Hotel (hotel_checkin), 30 min
+- 14:00-14:35 MOVE West Lake Nearby Hotel -&gt; Hangzhou Art Gallery by taxi, 35 min
+- 14:35-16:35 STAY Hangzhou Art Gallery (visit), 120 min
+- 16:35-17:10 MOVE Hangzhou Art Gallery -&gt; Hangzhou Art Gallery by taxi, 35 min
+- 17:10-17:30 STAY Hangzhou Art Gallery (visit), 20 min
+- 17:30-18:05 MOVE Hangzhou Art Gallery -&gt; West Lake Nearby Hotel by taxi, 35 min
+- 18:05-18:30 STAY West Lake Nearby Hotel (rest), 25 min
+- 18:30-19:30 STAY West Lake Nearby Hotel (meal), 60 min
+- 19:30-22:30 STAY West Lake Nearby Hotel (rest), 180 min
+- 22:30-23:59 STAY West Lake Nearby Hotel (sleep), 89 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 2 - 2026-07-02 - Hangzhou
+Accommodation area: West Lake Nearby Hotel
+- 00:00-07:30 STAY West Lake Nearby Hotel (sleep), 450 min
+- 07:30-08:15 STAY West Lake Nearby Hotel (meal), 45 min
+- 09:00-09:35 MOVE West Lake Nearby Hotel -&gt; West Lake by taxi, 35 min
+- 09:35-11:35 STAY West Lake (visit), 120 min
+- 11:35-12:10 MOVE West Lake -&gt; West Lake by taxi, 35 min
+- 12:10-14:10 STAY West Lake (visit), 120 min
+- 14:10-14:45 MOVE West Lake -&gt; West Lake Nearby Hotel by taxi, 35 min
+- 14:45-18:30 STAY West Lake Nearby Hotel (rest), 225 min
+- 18:30-19:30 STAY West Lake Nearby Hotel (meal), 60 min
+- 19:30-22:30 STAY West Lake Nearby Hotel (rest), 180 min
+- 22:30-23:59 STAY West Lake Nearby Hotel (sleep), 89 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 3 - 2026-07-03 - Hangzhou
+Accommodation area: West Lake Nearby Hotel
+- 00:00-07:30 STAY West Lake Nearby Hotel (sleep), 450 min
+- 07:30-08:15 STAY West Lake Nearby Hotel (meal), 45 min
+- 17:00-17:35 MOVE Hangzhou -&gt; Shanghai by train, 35 min
+- 17:35-18:35 STAY Shanghai (rest), 60 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Unresolved Issues
+
+- high: Cross-city route result is suspicious: Shanghai -&gt; Hangzhou is only 8.0 km. Suggested: Re-query route with explicit origin_city and destination_city, then rebuild this transfer.
+- medium: Timeline covers only 590 minutes of the day. Suggested: Add sleep, meals, moves, rest, and buffers until the day is approximately covered.
+- high: Cross-city route result is suspicious: Hangzhou -&gt; Shanghai is only 8.0 km. Suggested: Re-query route with explicit origin_city and destination_city, then rebuild this transfer.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.</pre></details><details><summary>原始输入</summary><pre>{
+  &quot;origin&quot;: &quot;Shanghai&quot;,
+  &quot;destination&quot;: &quot;Hangzhou&quot;,
+  &quot;start_date&quot;: &quot;2026-07-01&quot;,
+  &quot;end_date&quot;: &quot;2026-07-03&quot;,
+  &quot;travelers&quot;: {
+    &quot;adults&quot;: 2,
+    &quot;children&quot;: 1,
+    &quot;children_need_bed&quot;: 0,
+    &quot;children_ages&quot;: [
+      6
+    ]
+  },
+  &quot;budget_level&quot;: &quot;medium&quot;,
+  &quot;preferences&quot;: [
+    &quot;culture&quot;,
+    &quot;food&quot;,
+    &quot;relaxed&quot;,
+    &quot;family friendly&quot;
+  ],
+  &quot;must_visit&quot;: [
+    &quot;West Lake&quot;
+  ],
+  &quot;avoid&quot;: [
+    &quot;late night activities&quot;,
+    &quot;overly packed schedule&quot;
+  ]
+}</pre></details></section>
+<section id="case-2" class="panel"><h2>Beijing to Shanxi Wutai Mountain</h2><div class="metrics"><div><b>不可最终化</b><span>质量门禁</span></div><div><b>9</b><span>问题</span></div><div><b>0</b><span>MCP 错误</span></div><div><b>5</b><span>路线结果</span></div><div><b>0.0s</b><span>耗时</span></div></div><p class="quality">High or critical validation issues remain; final output is provisional.</p><details open><summary>问题列表</summary><table><thead><tr><th>严重度</th><th>类型</th><th>Day</th><th>地点</th><th>原因</th><th>建议</th></tr></thead><tbody><tr><td>high</td><td>infeasible_plan</td><td>1</td><td>北京, Xinzhou</td><td>Cross-city route result is suspicious: 北京 -&gt; Taiyuan is only 8.0 km.</td><td>Re-query route with explicit origin_city and destination_city, then rebuild this transfer.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>1</td><td>五台山, West Lake</td><td>Cross-city route result is suspicious: Xinzhou -&gt; Taiyuan is only 8.0 km.</td><td>Re-query route with explicit origin_city and destination_city, then rebuild this transfer.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>1</td><td>West Lake, 五台山 Nearby Hotel</td><td>Cross-city route result is suspicious: Taiyuan -&gt; Xinzhou is only 8.0 km.</td><td>Re-query route with explicit origin_city and destination_city, then rebuild this transfer.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>2</td><td>五台山, West Lake</td><td>Cross-city route result is suspicious: Xinzhou -&gt; Taiyuan is only 8.0 km.</td><td>Re-query route with explicit origin_city and destination_city, then rebuild this transfer.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>2</td><td>West Lake, 五台山 Nearby Hotel</td><td>Cross-city route result is suspicious: Taiyuan -&gt; Xinzhou is only 8.0 km.</td><td>Re-query route with explicit origin_city and destination_city, then rebuild this transfer.</td></tr><tr><td>medium</td><td>incomplete_day_timeline</td><td>3</td><td>Xinzhou</td><td>Timeline covers only 590 minutes of the day.</td><td>Add sleep, meals, moves, rest, and buffers until the day is approximately covered.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>3</td><td>Xinzhou, 北京</td><td>Cross-city route result is suspicious: Taiyuan -&gt; 北京 is only 8.0 km.</td><td>Re-query route with explicit origin_city and destination_city, then rebuild this transfer.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>1</td><td>Xinzhou, 五台山 Nearby Hotel</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>3</td><td>五台山 Nearby Hotel, Xinzhou</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr></tbody></table></details><details><summary>MCP 错误</summary><p class="muted">无。</p></details><details><summary>Cache 统计</summary><pre>{
+  &quot;hits&quot;: 0,
+  &quot;misses&quot;: 15,
+  &quot;last_hits&quot;: 0,
+  &quot;last_misses&quot;: 0,
+  &quot;entries&quot;: 15
+}</pre></details><details><summary>路线骨架</summary><table><thead><tr><th>#</th><th>类型</th><th>路线</th><th>交通</th><th>分钟</th><th>km</th><th>备注</th></tr></thead><tbody><tr><td>1</td><td>outbound</td><td>北京 -> Xinzhou</td><td>train</td><td>35</td><td>8.0</td><td>Updated from MCP route data.</td></tr><tr><td>2</td><td>return</td><td>Xinzhou -> 北京</td><td>train</td><td>35</td><td>8.0</td><td>Updated from MCP route data.</td></tr></tbody></table></details><details open><summary>每日时间线</summary><h3>Day 1 | 2026-06-29 | Xinzhou</h3><p class="muted">住宿：五台山 Nearby Hotel</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>北京</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>北京</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>08:15:00 - 08:50:00</td><td>move</td><td>outbound</td><td>北京 -&gt; Xinzhou</td><td>train</td><td>35</td><td>8.0</td></tr><tr><td>4</td><td>08:50:00 - 09:35:00</td><td>stay</td><td>meal</td><td>Xinzhou</td><td></td><td>45</td><td></td></tr><tr><td>5</td><td>13:00:00 - 13:30:00</td><td>stay</td><td>hotel_checkin</td><td>五台山 Nearby Hotel</td><td></td><td>30</td><td></td></tr><tr><td>6</td><td>14:00:00 - 14:35:00</td><td>move</td><td>local</td><td>五台山 Nearby Hotel -&gt; 五台山</td><td>taxi</td><td>35</td><td>8.0</td></tr><tr><td>7</td><td>14:35:00 - 16:35:00</td><td>stay</td><td>visit</td><td>五台山</td><td></td><td>120</td><td></td></tr><tr><td>8</td><td>16:35:00 - 17:10:00</td><td>move</td><td>local</td><td>五台山 -&gt; West Lake</td><td>taxi</td><td>35</td><td>8.0</td></tr><tr><td>9</td><td>17:10:00 - 17:30:00</td><td>stay</td><td>visit</td><td>West Lake</td><td></td><td>20</td><td></td></tr><tr><td>10</td><td>17:30:00 - 18:05:00</td><td>move</td><td>local</td><td>West Lake -&gt; 五台山 Nearby Hotel</td><td>taxi</td><td>35</td><td>8.0</td></tr><tr><td>11</td><td>18:05:00 - 18:30:00</td><td>stay</td><td>rest</td><td>五台山 Nearby Hotel</td><td></td><td>25</td><td></td></tr><tr><td>12</td><td>18:30:00 - 19:30:00</td><td>stay</td><td>meal</td><td>五台山 Nearby Hotel</td><td></td><td>60</td><td></td></tr><tr><td>13</td><td>19:30:00 - 22:30:00</td><td>stay</td><td>rest</td><td>五台山 Nearby Hotel</td><td></td><td>180</td><td></td></tr><tr><td>14</td><td>22:30:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>五台山 Nearby Hotel</td><td></td><td>89</td><td></td></tr></tbody></table>
+<h3>Day 2 | 2026-06-30 | Xinzhou</h3><p class="muted">住宿：五台山 Nearby Hotel</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>五台山 Nearby Hotel</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>五台山 Nearby Hotel</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>09:00:00 - 09:35:00</td><td>move</td><td>local</td><td>五台山 Nearby Hotel -&gt; 五台山</td><td>taxi</td><td>35</td><td>8.0</td></tr><tr><td>4</td><td>09:35:00 - 11:35:00</td><td>stay</td><td>visit</td><td>五台山</td><td></td><td>120</td><td></td></tr><tr><td>5</td><td>11:35:00 - 12:10:00</td><td>move</td><td>local</td><td>五台山 -&gt; West Lake</td><td>taxi</td><td>35</td><td>8.0</td></tr><tr><td>6</td><td>12:10:00 - 14:10:00</td><td>stay</td><td>visit</td><td>West Lake</td><td></td><td>120</td><td></td></tr><tr><td>7</td><td>14:10:00 - 14:45:00</td><td>move</td><td>local</td><td>West Lake -&gt; 五台山 Nearby Hotel</td><td>taxi</td><td>35</td><td>8.0</td></tr><tr><td>8</td><td>14:45:00 - 18:30:00</td><td>stay</td><td>rest</td><td>五台山 Nearby Hotel</td><td></td><td>225</td><td></td></tr><tr><td>9</td><td>18:30:00 - 19:30:00</td><td>stay</td><td>meal</td><td>五台山 Nearby Hotel</td><td></td><td>60</td><td></td></tr><tr><td>10</td><td>19:30:00 - 22:30:00</td><td>stay</td><td>rest</td><td>五台山 Nearby Hotel</td><td></td><td>180</td><td></td></tr><tr><td>11</td><td>22:30:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>五台山 Nearby Hotel</td><td></td><td>89</td><td></td></tr></tbody></table>
+<h3>Day 3 | 2026-07-01 | Xinzhou</h3><p class="muted">住宿：五台山 Nearby Hotel</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>五台山 Nearby Hotel</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>五台山 Nearby Hotel</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>17:00:00 - 17:35:00</td><td>move</td><td>return</td><td>Xinzhou -&gt; 北京</td><td>train</td><td>35</td><td>8.0</td></tr><tr><td>4</td><td>17:35:00 - 18:35:00</td><td>stay</td><td>rest</td><td>北京</td><td></td><td>60</td><td></td></tr></tbody></table></details><details><summary>最终文本</summary><pre># 北京 to 山西 travel plan
+
+北京 -&gt; 山西
+
+## 状态
+
+当前计划还不能作为可执行行程使用，因为仍有必须解决的校验问题。
+High or critical validation issues remain; final output is provisional.
+
+## Route Skeleton
+
+- outbound: 北京 -&gt; Xinzhou by train, 2026-06-29 08:00 to 2026-06-29 08:35, 35 min
+- return: Xinzhou -&gt; 北京 by train, 2026-07-01 17:00 to 2026-07-01 17:35, 35 min
+
+## Accommodation
+
+- Xinzhou: 五台山 Nearby Hotel, 2026-06-29 to 2026-07-02, near 五台山
+
+## Day 1 - 2026-06-29 - Xinzhou
+Accommodation area: 五台山 Nearby Hotel
+- 00:00-07:30 STAY 北京 (sleep), 450 min
+- 07:30-08:15 STAY 北京 (meal), 45 min
+- 08:15-08:50 MOVE 北京 -&gt; Xinzhou by train, 35 min
+- 08:50-09:35 STAY Xinzhou (meal), 45 min
+- 13:00-13:30 STAY 五台山 Nearby Hotel (hotel_checkin), 30 min
+- 14:00-14:35 MOVE 五台山 Nearby Hotel -&gt; 五台山 by taxi, 35 min
+- 14:35-16:35 STAY 五台山 (visit), 120 min
+- 16:35-17:10 MOVE 五台山 -&gt; West Lake by taxi, 35 min
+- 17:10-17:30 STAY West Lake (visit), 20 min
+- 17:30-18:05 MOVE West Lake -&gt; 五台山 Nearby Hotel by taxi, 35 min
+- 18:05-18:30 STAY 五台山 Nearby Hotel (rest), 25 min
+- 18:30-19:30 STAY 五台山 Nearby Hotel (meal), 60 min
+- 19:30-22:30 STAY 五台山 Nearby Hotel (rest), 180 min
+- 22:30-23:59 STAY 五台山 Nearby Hotel (sleep), 89 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 2 - 2026-06-30 - Xinzhou
+Accommodation area: 五台山 Nearby Hotel
+- 00:00-07:30 STAY 五台山 Nearby Hotel (sleep), 450 min
+- 07:30-08:15 STAY 五台山 Nearby Hotel (meal), 45 min
+- 09:00-09:35 MOVE 五台山 Nearby Hotel -&gt; 五台山 by taxi, 35 min
+- 09:35-11:35 STAY 五台山 (visit), 120 min
+- 11:35-12:10 MOVE 五台山 -&gt; West Lake by taxi, 35 min
+- 12:10-14:10 STAY West Lake (visit), 120 min
+- 14:10-14:45 MOVE West Lake -&gt; 五台山 Nearby Hotel by taxi, 35 min
+- 14:45-18:30 STAY 五台山 Nearby Hotel (rest), 225 min
+- 18:30-19:30 STAY 五台山 Nearby Hotel (meal), 60 min
+- 19:30-22:30 STAY 五台山 Nearby Hotel (rest), 180 min
+- 22:30-23:59 STAY 五台山 Nearby Hotel (sleep), 89 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 3 - 2026-07-01 - Xinzhou
+Accommodation area: 五台山 Nearby Hotel
+- 00:00-07:30 STAY 五台山 Nearby Hotel (sleep), 450 min
+- 07:30-08:15 STAY 五台山 Nearby Hotel (meal), 45 min
+- 17:00-17:35 MOVE Xinzhou -&gt; 北京 by train, 35 min
+- 17:35-18:35 STAY 北京 (rest), 60 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Unresolved Issues
+
+- high: Cross-city route result is suspicious: 北京 -&gt; Taiyuan is only 8.0 km. Suggested: Re-query route with explicit origin_city and destination_city, then rebuild this transfer.
+- high: Cross-city route result is suspicious: Xinzhou -&gt; Taiyuan is only 8.0 km. Suggested: Re-query route with explicit origin_city and destination_city, then rebuild this transfer.
+- high: Cross-city route result is suspicious: Taiyuan -&gt; Xinzhou is only 8.0 km. Suggested: Re-query route with explicit origin_city and destination_city, then rebuild this transfer.
+- high: Cross-city route result is suspicious: Xinzhou -&gt; Taiyuan is only 8.0 km. Suggested: Re-query route with explicit origin_city and destination_city, then rebuild this transfer.
+- high: Cross-city route result is suspicious: Taiyuan -&gt; Xinzhou is only 8.0 km. Suggested: Re-query route with explicit origin_city and destination_city, then rebuild this transfer.
+- medium: Timeline covers only 590 minutes of the day. Suggested: Add sleep, meals, moves, rest, and buffers until the day is approximately covered.
+- high: Cross-city route result is suspicious: Taiyuan -&gt; 北京 is only 8.0 km. Suggested: Re-query route with explicit origin_city and destination_city, then rebuild this transfer.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.</pre></details><details><summary>原始输入</summary><pre>{
+  &quot;origin&quot;: &quot;北京&quot;,
+  &quot;destination&quot;: &quot;山西&quot;,
+  &quot;start_date&quot;: &quot;2026-06-29&quot;,
+  &quot;end_date&quot;: &quot;2026-07-01&quot;,
+  &quot;travelers&quot;: {
+    &quot;adults&quot;: 3,
+    &quot;children&quot;: 0,
+    &quot;children_need_bed&quot;: 0,
+    &quot;children_ages&quot;: []
+  },
+  &quot;budget_level&quot;: &quot;medium&quot;,
+  &quot;preferences&quot;: [
+    &quot;culture&quot;,
+    &quot;food&quot;,
+    &quot;relaxed&quot;,
+    &quot;family friendly&quot;
+  ],
+  &quot;must_visit&quot;: [
+    &quot;五台山&quot;
+  ],
+  &quot;avoid&quot;: [
+    &quot;late night activities&quot;,
+    &quot;overly packed schedule&quot;
+  ]
+}</pre></details></section>
+<section id="case-3" class="panel"><h2>Shanghai to Suzhou culture day</h2><div class="metrics"><div><b>不可最终化</b><span>质量门禁</span></div><div><b>5</b><span>问题</span></div><div><b>0</b><span>MCP 错误</span></div><div><b>5</b><span>路线结果</span></div><div><b>0.0s</b><span>耗时</span></div></div><p class="quality">High or critical validation issues remain; final output is provisional.</p><details open><summary>问题列表</summary><table><thead><tr><th>严重度</th><th>类型</th><th>Day</th><th>地点</th><th>原因</th><th>建议</th></tr></thead><tbody><tr><td>high</td><td>infeasible_plan</td><td>1</td><td>Shanghai, Suzhou</td><td>Cross-city route result is suspicious: Shanghai -&gt; Suzhou is only 8.0 km.</td><td>Re-query route with explicit origin_city and destination_city, then rebuild this transfer.</td></tr><tr><td>medium</td><td>incomplete_day_timeline</td><td>2</td><td>Suzhou</td><td>Timeline covers only 590 minutes of the day.</td><td>Add sleep, meals, moves, rest, and buffers until the day is approximately covered.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>2</td><td>Suzhou, Shanghai</td><td>Cross-city route result is suspicious: Suzhou -&gt; Shanghai is only 8.0 km.</td><td>Re-query route with explicit origin_city and destination_city, then rebuild this transfer.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>1</td><td>Suzhou, Humble Administrator&#x27;s Garden Nearby Hotel</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>2</td><td>Humble Administrator&#x27;s Garden Nearby Hotel, Suzhou</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr></tbody></table></details><details><summary>MCP 错误</summary><p class="muted">无。</p></details><details><summary>Cache 统计</summary><pre>{
+  &quot;hits&quot;: 0,
+  &quot;misses&quot;: 12,
+  &quot;last_hits&quot;: 0,
+  &quot;last_misses&quot;: 0,
+  &quot;entries&quot;: 12
+}</pre></details><details><summary>路线骨架</summary><table><thead><tr><th>#</th><th>类型</th><th>路线</th><th>交通</th><th>分钟</th><th>km</th><th>备注</th></tr></thead><tbody><tr><td>1</td><td>outbound</td><td>Shanghai -> Suzhou</td><td>train</td><td>35</td><td>8.0</td><td>Updated from MCP route data.</td></tr><tr><td>2</td><td>return</td><td>Suzhou -> Shanghai</td><td>train</td><td>35</td><td>8.0</td><td>Updated from MCP route data.</td></tr></tbody></table></details><details open><summary>每日时间线</summary><h3>Day 1 | 2026-07-04 | Suzhou</h3><p class="muted">住宿：Humble Administrator&#x27;s Garden Nearby Hotel</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>Shanghai</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>Shanghai</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>08:15:00 - 08:50:00</td><td>move</td><td>outbound</td><td>Shanghai -&gt; Suzhou</td><td>train</td><td>35</td><td>8.0</td></tr><tr><td>4</td><td>08:50:00 - 09:35:00</td><td>stay</td><td>meal</td><td>Suzhou</td><td></td><td>45</td><td></td></tr><tr><td>5</td><td>13:00:00 - 13:30:00</td><td>stay</td><td>hotel_checkin</td><td>Humble Administrator&#x27;s Garden Nearby Hotel</td><td></td><td>30</td><td></td></tr><tr><td>6</td><td>14:00:00 - 14:35:00</td><td>move</td><td>local</td><td>Humble Administrator&#x27;s Garden Nearby Hotel -&gt; Humble Administrator&#x27;s Garden</td><td>taxi</td><td>35</td><td>8.0</td></tr><tr><td>7</td><td>14:35:00 - 16:35:00</td><td>stay</td><td>visit</td><td>Humble Administrator&#x27;s Garden</td><td></td><td>120</td><td></td></tr><tr><td>8</td><td>16:35:00 - 17:10:00</td><td>move</td><td>local</td><td>Humble Administrator&#x27;s Garden -&gt; West Lake</td><td>taxi</td><td>35</td><td>8.0</td></tr><tr><td>9</td><td>17:10:00 - 17:30:00</td><td>stay</td><td>visit</td><td>West Lake</td><td></td><td>20</td><td></td></tr><tr><td>10</td><td>17:30:00 - 18:05:00</td><td>move</td><td>local</td><td>West Lake -&gt; Humble Administrator&#x27;s Garden Nearby Hotel</td><td>taxi</td><td>35</td><td>8.0</td></tr><tr><td>11</td><td>18:05:00 - 18:30:00</td><td>stay</td><td>rest</td><td>Humble Administrator&#x27;s Garden Nearby Hotel</td><td></td><td>25</td><td></td></tr><tr><td>12</td><td>18:30:00 - 19:30:00</td><td>stay</td><td>meal</td><td>Humble Administrator&#x27;s Garden Nearby Hotel</td><td></td><td>60</td><td></td></tr><tr><td>13</td><td>19:30:00 - 22:30:00</td><td>stay</td><td>rest</td><td>Humble Administrator&#x27;s Garden Nearby Hotel</td><td></td><td>180</td><td></td></tr><tr><td>14</td><td>22:30:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>Humble Administrator&#x27;s Garden Nearby Hotel</td><td></td><td>89</td><td></td></tr></tbody></table>
+<h3>Day 2 | 2026-07-05 | Suzhou</h3><p class="muted">住宿：Humble Administrator&#x27;s Garden Nearby Hotel</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>Humble Administrator&#x27;s Garden Nearby Hotel</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>Humble Administrator&#x27;s Garden Nearby Hotel</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>17:00:00 - 17:35:00</td><td>move</td><td>return</td><td>Suzhou -&gt; Shanghai</td><td>train</td><td>35</td><td>8.0</td></tr><tr><td>4</td><td>17:35:00 - 18:35:00</td><td>stay</td><td>rest</td><td>Shanghai</td><td></td><td>60</td><td></td></tr></tbody></table></details><details><summary>最终文本</summary><pre># Shanghai to Suzhou travel plan
+
+Shanghai -&gt; Suzhou
+
+## 状态
+
+当前计划还不能作为可执行行程使用，因为仍有必须解决的校验问题。
+High or critical validation issues remain; final output is provisional.
+
+## Route Skeleton
+
+- outbound: Shanghai -&gt; Suzhou by train, 2026-07-04 08:00 to 2026-07-04 08:35, 35 min
+- return: Suzhou -&gt; Shanghai by train, 2026-07-05 17:00 to 2026-07-05 17:35, 35 min
+
+## Accommodation
+
+- Suzhou: Humble Administrator&#x27;s Garden Nearby Hotel, 2026-07-04 to 2026-07-06, near Humble Administrator&#x27;s Garden
+
+## Day 1 - 2026-07-04 - Suzhou
+Accommodation area: Humble Administrator&#x27;s Garden Nearby Hotel
+- 00:00-07:30 STAY Shanghai (sleep), 450 min
+- 07:30-08:15 STAY Shanghai (meal), 45 min
+- 08:15-08:50 MOVE Shanghai -&gt; Suzhou by train, 35 min
+- 08:50-09:35 STAY Suzhou (meal), 45 min
+- 13:00-13:30 STAY Humble Administrator&#x27;s Garden Nearby Hotel (hotel_checkin), 30 min
+- 14:00-14:35 MOVE Humble Administrator&#x27;s Garden Nearby Hotel -&gt; Humble Administrator&#x27;s Garden by taxi, 35 min
+- 14:35-16:35 STAY Humble Administrator&#x27;s Garden (visit), 120 min
+- 16:35-17:10 MOVE Humble Administrator&#x27;s Garden -&gt; West Lake by taxi, 35 min
+- 17:10-17:30 STAY West Lake (visit), 20 min
+- 17:30-18:05 MOVE West Lake -&gt; Humble Administrator&#x27;s Garden Nearby Hotel by taxi, 35 min
+- 18:05-18:30 STAY Humble Administrator&#x27;s Garden Nearby Hotel (rest), 25 min
+- 18:30-19:30 STAY Humble Administrator&#x27;s Garden Nearby Hotel (meal), 60 min
+- 19:30-22:30 STAY Humble Administrator&#x27;s Garden Nearby Hotel (rest), 180 min
+- 22:30-23:59 STAY Humble Administrator&#x27;s Garden Nearby Hotel (sleep), 89 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 2 - 2026-07-05 - Suzhou
+Accommodation area: Humble Administrator&#x27;s Garden Nearby Hotel
+- 00:00-07:30 STAY Humble Administrator&#x27;s Garden Nearby Hotel (sleep), 450 min
+- 07:30-08:15 STAY Humble Administrator&#x27;s Garden Nearby Hotel (meal), 45 min
+- 17:00-17:35 MOVE Suzhou -&gt; Shanghai by train, 35 min
+- 17:35-18:35 STAY Shanghai (rest), 60 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Unresolved Issues
+
+- high: Cross-city route result is suspicious: Shanghai -&gt; Suzhou is only 8.0 km. Suggested: Re-query route with explicit origin_city and destination_city, then rebuild this transfer.
+- medium: Timeline covers only 590 minutes of the day. Suggested: Add sleep, meals, moves, rest, and buffers until the day is approximately covered.
+- high: Cross-city route result is suspicious: Suzhou -&gt; Shanghai is only 8.0 km. Suggested: Re-query route with explicit origin_city and destination_city, then rebuild this transfer.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.</pre></details><details><summary>原始输入</summary><pre>{
+  &quot;origin&quot;: &quot;Shanghai&quot;,
+  &quot;destination&quot;: &quot;Suzhou&quot;,
+  &quot;start_date&quot;: &quot;2026-07-04&quot;,
+  &quot;end_date&quot;: &quot;2026-07-05&quot;,
+  &quot;travelers&quot;: {
+    &quot;adults&quot;: 2,
+    &quot;children&quot;: 0,
+    &quot;children_need_bed&quot;: 0,
+    &quot;children_ages&quot;: []
+  },
+  &quot;budget_level&quot;: &quot;medium&quot;,
+  &quot;preferences&quot;: [
+    &quot;culture&quot;,
+    &quot;garden&quot;,
+    &quot;food&quot;,
+    &quot;walkable&quot;
+  ],
+  &quot;must_visit&quot;: [
+    &quot;Humble Administrator&#x27;s Garden&quot;
+  ],
+  &quot;avoid&quot;: [
+    &quot;long transfers&quot;
+  ]
+}</pre></details></section>
+</main>
+</body>
+</html>

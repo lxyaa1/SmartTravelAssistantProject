@@ -89,11 +89,27 @@ async def _execute_amap_mcp_query_plan(
 
     tools = {tool.name: tool for tool in await load_amap_tools(provider=provider)}
     collected = McpResults()
-    semaphore = asyncio.Semaphore(4)
+    concurrency = max(1, int(os.getenv("TRAVEL_AGENT_AMAP_CONCURRENCY", "1")))
+    request_interval_seconds = max(0.0, float(os.getenv("TRAVEL_AGENT_AMAP_REQUEST_INTERVAL_SECONDS", "0.2")))
+    semaphore = asyncio.Semaphore(concurrency)
 
     async def run_query(query: McpQuery) -> McpResults:
         async with semaphore:
-            return await _execute_amap_mcp_query(query=query, default_city=default_city, tools=tools)
+            try:
+                result = await _execute_amap_mcp_query(query=query, default_city=default_city, tools=tools)
+                if request_interval_seconds:
+                    await asyncio.sleep(request_interval_seconds)
+                return result
+            except Exception as exc:
+                if request_interval_seconds:
+                    await asyncio.sleep(request_interval_seconds)
+                return McpResults(
+                    errors=[
+                        "Amap query failed: "
+                        f"{query.tool_name.value}({json.dumps(query.args, ensure_ascii=False, sort_keys=True, default=str)}) "
+                        f"{type(exc).__name__}: {exc}"
+                    ]
+                )
 
     for result in await asyncio.gather(*(run_query(query) for query in query_plan.queries)):
         collected = _merge_results(collected, result)
@@ -164,9 +180,12 @@ async def _execute_amap_mcp_query(
                     "citylimit": True,
                 }
             )
+        pois = _extract_pois(raw)
+        if "maps_search_detail" in tools:
+            pois = await _enrich_pois_with_detail_locations(tools, pois)
         return McpResults(
             lodging=_parse_pois_as_lodging_results(
-                raw=raw,
+                raw=pois,
                 city=city,
                 anchor_place=anchor_place,
                 anchor_location=anchor_location,
@@ -207,16 +226,24 @@ async def _execute_amap_mcp_query(
     if query.tool_name == McpToolName.GET_ROUTE_TIME:
         origin_name = str(args["origin"])
         destination_name = str(args["destination"])
+        origin_city = str(args.get("origin_city") or args.get("city") or default_city)
+        destination_city = str(args.get("destination_city") or args.get("cityd") or origin_city)
         mode = TransportMode(str(args.get("mode", TransportMode.TAXI.value)))
-        origin_location = await _geocode(tools, origin_name, default_city)
-        destination_location = await _geocode(tools, destination_name, default_city)
-        raw = await _route(tools, origin_location, destination_location, mode, default_city)
-        duration, distance = _parse_route_metrics(raw)
+        origin_location = str(args.get("origin_location") or "") or await _geocode(tools, origin_name, origin_city)
+        destination_location = str(args.get("destination_location") or "") or await _geocode(
+            tools,
+            destination_name,
+            destination_city,
+        )
+        raw = await _route(tools, origin_location, destination_location, mode, origin_city, destination_city)
+        duration, distance = _parse_route_metrics(raw, mode)
         return McpResults(
             routes=[
                 RouteResult(
                     origin=origin_name,
                     destination=destination_name,
+                    origin_city=origin_city,
+                    destination_city=destination_city,
                     mode=mode,
                     duration_minutes=duration,
                     distance_km=distance,
@@ -257,6 +284,8 @@ def _parse_pois_as_attractions(raw: Any, city: str) -> list[AttractionResult]:
         name = _first_text(poi.get("name"))
         if not name:
             continue
+        if not _is_relevant_attraction_poi(poi):
+            continue
         results.append(
             AttractionResult(
                 name=name,
@@ -274,6 +303,33 @@ def _parse_pois_as_attractions(raw: Any, city: str) -> list[AttractionResult]:
             )
         )
     return results
+
+
+def _is_relevant_attraction_poi(poi: dict[str, Any]) -> bool:
+    text = " ".join(
+        [
+            _first_text(poi.get("name")),
+            _first_text(poi.get("type")),
+            _first_text(poi.get("typecode")),
+        ]
+    ).lower()
+    excluded_tokens = [
+        "酒店",
+        "民宿",
+        "公寓",
+        "住宿",
+        "宾馆",
+        "饭店",
+        "餐厅",
+        "餐饮",
+        "restaurant",
+        "hotel",
+        "apartment",
+        "mall",
+        "商场",
+        "购物",
+    ]
+    return not any(token in text for token in excluded_tokens)
 
 
 def _parse_pois_as_accommodation_areas(raw: Any, city: str) -> list[AccommodationAreaResult]:
@@ -309,6 +365,7 @@ def _parse_pois_as_lodging_results(
         if not name:
             continue
         location = _first_text(poi.get("location"))
+        distance_to_anchor = _distance_between_locations_km(anchor_location, location) if location else 9999
         results.append(
             LodgingResult(
                 name=name,
@@ -317,7 +374,7 @@ def _parse_pois_as_lodging_results(
                 address=_first_text(poi.get("address")),
                 location=location,
                 anchor_place=anchor_place,
-                distance_to_anchor_km=_distance_between_locations_km(anchor_location, location),
+                distance_to_anchor_km=distance_to_anchor,
                 estimated_price_level=budget_level,
                 notes=_compact_raw(poi),
             )
@@ -423,19 +480,31 @@ async def _search_location(tools: dict[str, Any], keyword: str, city: str) -> st
     return ""
 
 
-async def _route(tools: dict[str, Any], origin: str, destination: str, mode: TransportMode, city: str):
+async def _route(
+    tools: dict[str, Any],
+    origin: str,
+    destination: str,
+    mode: TransportMode,
+    origin_city: str,
+    destination_city: str,
+):
     if mode == TransportMode.WALK:
         return await tools["maps_direction_walking"].ainvoke({"origin": origin, "destination": destination})
     if mode == TransportMode.TRANSIT:
         return await tools["maps_direction_transit_integrated"].ainvoke(
-            {"origin": origin, "destination": destination, "city": _query_city(city), "cityd": _query_city(city)}
+            {
+                "origin": origin,
+                "destination": destination,
+                "city": _query_city(origin_city),
+                "cityd": _query_city(destination_city or origin_city),
+            }
         )
     if mode == TransportMode.TAXI:
         return await tools["maps_direction_driving"].ainvoke({"origin": origin, "destination": destination})
     return await tools["maps_distance"].ainvoke({"origins": origin, "destination": destination, "type": "1"})
 
 
-def _parse_route_metrics(raw: Any) -> tuple[int, float]:
+def _parse_route_metrics(raw: Any, mode: TransportMode = TransportMode.TAXI) -> tuple[int, float]:
     parsed = _maybe_json(raw)
     duration_seconds, distance_meters = _first_route_metric_pair(parsed)
 
@@ -446,7 +515,22 @@ def _parse_route_metrics(raw: Any) -> tuple[int, float]:
 
     duration_minutes = max(1, int(round(float(duration_seconds) / 60)))
     distance_km = round(float(distance_meters) / 1000, 2)
+    duration_minutes = max(duration_minutes, _minimum_duration_minutes_for_distance(mode, distance_km))
     return duration_minutes, distance_km
+
+
+def _minimum_duration_minutes_for_distance(mode: TransportMode, distance_km: float) -> int:
+    if distance_km <= 0:
+        return 1
+    speed_by_mode = {
+        TransportMode.WALK: 4,
+        TransportMode.TAXI: 60,
+        TransportMode.TRANSIT: 45,
+        TransportMode.TRAIN: 90,
+        TransportMode.FLIGHT: 500,
+    }
+    speed_kmh = speed_by_mode.get(mode, 45)
+    return max(1, int(math.ceil(distance_km / speed_kmh * 60)))
 
 
 def _first_route_metric_pair(value: Any) -> tuple[float | None, float | None]:
@@ -469,6 +553,8 @@ def _first_route_metric_pair(value: Any) -> tuple[float | None, float | None]:
 
 def _extract_pois(raw: Any) -> list[dict[str, Any]]:
     parsed = _maybe_json(raw)
+    if isinstance(parsed, list):
+        return [item for item in parsed if isinstance(item, dict)]
     if isinstance(parsed, dict):
         pois = parsed.get("pois") or parsed.get("data") or parsed.get("results")
         if isinstance(pois, list):
@@ -481,6 +567,37 @@ def _extract_pois(raw: Any) -> list[dict[str, Any]]:
         if isinstance(parsed, dict) and isinstance(parsed.get("pois"), list):
             return [item for item in parsed["pois"] if isinstance(item, dict)]
     return []
+
+
+async def _enrich_pois_with_detail_locations(tools: dict[str, Any], pois: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    enriched: list[dict[str, Any]] = []
+    for poi in pois[:8]:
+        current = dict(poi)
+        if _first_text(current.get("location")):
+            enriched.append(current)
+            continue
+        poi_id = _first_text(current.get("id"))
+        if not poi_id:
+            enriched.append(current)
+            continue
+        try:
+            detail_raw = await tools["maps_search_detail"].ainvoke({"id": poi_id})
+        except Exception:
+            enriched.append(current)
+            continue
+        detail = _maybe_json(detail_raw)
+        detail_pois = _extract_pois(detail)
+        if detail_pois:
+            detail = detail_pois[0]
+        if isinstance(detail, dict):
+            location = _first_text(detail.get("location"))
+            if location:
+                current["location"] = location
+            for key in ("address", "adname", "business_area", "type", "typecode"):
+                if not _first_text(current.get(key)) and _first_text(detail.get(key)):
+                    current[key] = detail[key]
+        enriched.append(current)
+    return enriched
 
 
 def _normalize_weather_condition(text: str) -> str:
@@ -686,8 +803,8 @@ def _merge_results(existing: McpResults, incoming: McpResults) -> McpResults:
     attractions = {(item.name, item.city, item.date): item for item in existing.attractions}
     attractions.update({(item.name, item.city, item.date): item for item in incoming.attractions})
 
-    routes = {(item.origin, item.destination, item.mode): item for item in existing.routes}
-    routes.update({(item.origin, item.destination, item.mode): item for item in incoming.routes})
+    routes = {_route_result_key(item): item for item in existing.routes}
+    routes.update({_route_result_key(item): item for item in incoming.routes})
 
     accommodation_areas = {(item.area_name, item.city): item for item in existing.accommodation_areas}
     accommodation_areas.update({(item.area_name, item.city): item for item in incoming.accommodation_areas})
@@ -701,6 +818,7 @@ def _merge_results(existing: McpResults, incoming: McpResults) -> McpResults:
         routes=list(routes.values()),
         accommodation_areas=list(accommodation_areas.values()),
         lodging=list(lodging.values()),
+        errors=[*existing.errors, *incoming.errors],
     )
 
 
@@ -709,3 +827,13 @@ def _mcp_lodging(mcp_results: McpResults | object) -> list[LodgingResult]:
     if value is None:
         return []
     return value if isinstance(value, list) else []
+
+
+def _route_result_key(route: RouteResult) -> tuple[str, str, TransportMode, str, str]:
+    return (
+        route.origin,
+        route.destination,
+        route.mode,
+        route.origin_city,
+        route.destination_city,
+    )

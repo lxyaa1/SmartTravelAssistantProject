@@ -10,23 +10,52 @@ from backend.schemas.trip import McpQuery, McpQueryPlan, McpQueryStage, McpToolN
 
 
 ROUTE_CASES = [
-    ("太原", "五台山", "transit"),
-    ("五台山", "太原", "transit"),
-    ("太原", "北京", "train"),
-    ("北京", "太原", "train"),
+    {
+        "origin": "Taiyuan",
+        "destination": "Wutai Mountain",
+        "origin_city": "Taiyuan",
+        "destination_city": "Xinzhou",
+        "mode": "transit",
+        "distance_range": (100, 300),
+        "duration_range": (120, 500),
+    },
+    {
+        "origin": "Wutai Mountain",
+        "destination": "Taiyuan",
+        "origin_city": "Xinzhou",
+        "destination_city": "Taiyuan",
+        "mode": "transit",
+        "distance_range": (100, 300),
+        "duration_range": (120, 500),
+    },
+    {
+        "origin": "Taiyuan",
+        "destination": "Beijing",
+        "origin_city": "Taiyuan",
+        "destination_city": "Beijing",
+        "mode": "train",
+        "distance_range": (300, 700),
+        "duration_range": (180, 600),
+    },
+    {
+        "origin": "Beijing",
+        "destination": "Taiyuan",
+        "origin_city": "Beijing",
+        "destination_city": "Taiyuan",
+        "mode": "train",
+        "distance_range": (300, 700),
+        "duration_range": (180, 600),
+    },
 ]
 
 
-def test_live_amap_route_anomaly_cases() -> None:
-    """Diagnostic live test for route values that produced bad plans.
+def test_live_amap_route_anomaly_cases_with_city_context() -> None:
+    """Run manually to verify Amap route values for previously bad cases.
 
-    Run with:
-      set RUN_AMAP_MCP_LIVE_TESTS=1
-      set TRAVEL_AGENT_AMAP_PROVIDER=official
+    PowerShell:
+      $env:RUN_AMAP_MCP_LIVE_TESTS="1"
+      $env:TRAVEL_AGENT_AMAP_PROVIDER="official"
       python -m pytest tests/test_amap_route_anomalies.py -q -s
-
-    The assertions intentionally encode broad sanity checks, not exact route
-    truth. If this fails, the workflow should not trust that MCP route result.
     """
     _require_live_amap_tests()
 
@@ -34,38 +63,49 @@ def test_live_amap_route_anomaly_cases() -> None:
         queries=[
             McpQuery(
                 tool_name=McpToolName.GET_ROUTE_TIME,
-                args={"origin": origin, "destination": destination, "mode": mode},
-                purpose="diagnose abnormal Amap route result",
+                args={key: value for key, value in case.items() if key not in {"distance_range", "duration_range"}},
+                purpose="diagnose Amap route result with explicit endpoint cities",
                 stage=McpQueryStage.PLAN_CHECK,
             )
-            for origin, destination, mode in ROUTE_CASES
+            for case in ROUTE_CASES
         ]
     )
 
     results = execute_amap_mcp_query_plan(
         query_plan=query_plan,
-        default_city="太原",
+        default_city="Taiyuan",
         provider=os.getenv("TRAVEL_AGENT_AMAP_PROVIDER", "official"),
     )
-    routes = {(route.origin, route.destination, route.mode.value): route for route in results.routes}
+    routes = {
+        (route.origin, route.destination, route.origin_city, route.destination_city, route.mode.value): route
+        for route in results.routes
+    }
 
     print("\nAmap normalized route results:")
-    for origin, destination, mode in ROUTE_CASES:
-        route = routes[(origin, destination, mode)]
+    for case in ROUTE_CASES:
+        route = routes[
+            (
+                case["origin"],
+                case["destination"],
+                case["origin_city"],
+                case["destination_city"],
+                case["mode"],
+            )
+        ]
         print(
-            f"- {origin} -> {destination} ({mode}): "
-            f"{route.duration_minutes} min, {route.distance_km} km"
+            f"- {route.origin}({route.origin_city}) -> "
+            f"{route.destination}({route.destination_city}) "
+            f"({route.mode.value}): {route.duration_minutes} min, {route.distance_km} km"
         )
+        low, high = case["distance_range"]
+        assert low <= route.distance_km <= high
+        duration_low, duration_high = case["duration_range"]
+        assert duration_low <= route.duration_minutes <= duration_high
 
-    taiyuan_to_wutai = routes[("太原", "五台山", "transit")]
-    wutai_to_taiyuan = routes[("五台山", "太原", "transit")]
-    taiyuan_to_beijing = routes[("太原", "北京", "train")]
-    beijing_to_taiyuan = routes[("北京", "太原", "train")]
-
-    assert 100 <= taiyuan_to_wutai.distance_km <= 300
-    assert 100 <= wutai_to_taiyuan.distance_km <= 300
-    assert 300 <= taiyuan_to_beijing.distance_km <= 700
-    assert 300 <= beijing_to_taiyuan.distance_km <= 700
+    taiyuan_to_wutai = routes[("Taiyuan", "Wutai Mountain", "Taiyuan", "Xinzhou", "transit")]
+    wutai_to_taiyuan = routes[("Wutai Mountain", "Taiyuan", "Xinzhou", "Taiyuan", "transit")]
+    taiyuan_to_beijing = routes[("Taiyuan", "Beijing", "Taiyuan", "Beijing", "train")]
+    beijing_to_taiyuan = routes[("Beijing", "Taiyuan", "Beijing", "Taiyuan", "train")]
 
     assert _distance_ratio(taiyuan_to_wutai.distance_km, wutai_to_taiyuan.distance_km) <= 1.5
     assert _distance_ratio(taiyuan_to_beijing.distance_km, beijing_to_taiyuan.distance_km) <= 1.5

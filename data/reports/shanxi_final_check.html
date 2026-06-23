@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TravelAgent Batch Report</title>
+
+<style>
+:root { color-scheme: light; font-family: Arial, "Microsoft YaHei", sans-serif; }
+body { margin: 0; background: #f5f6f8; color: #20242a; }
+main { max-width: 1280px; margin: 0 auto; padding: 24px; }
+header { margin-bottom: 18px; }
+h1 { margin: 0 0 8px; font-size: 28px; }
+h2 { margin: 0 0 14px; font-size: 21px; }
+h3 { margin: 18px 0 8px; font-size: 16px; }
+.panel { background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; padding: 18px; margin: 16px 0; }
+.error-panel { border-color: #d64545; }
+.metrics { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px; margin: 12px 0; }
+.metrics div { border: 1px solid #dfe3e8; border-radius: 6px; padding: 10px; background: #fafbfc; }
+.metrics b { display: block; font-size: 18px; margin-bottom: 4px; }
+.metrics span, .muted { color: #69707a; }
+.quality { border-left: 4px solid #7c8798; padding-left: 10px; color: #414852; }
+.badge { display: inline-block; min-width: 72px; text-align: center; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.badge.ok { background: #dcfce7; color: #166534; }
+.badge.blocked { background: #fef3c7; color: #92400e; }
+.badge.error { background: #fee2e2; color: #991b1b; }
+table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 13px; }
+th, td { border: 1px solid #dfe3e8; padding: 7px 8px; vertical-align: top; }
+th { background: #f0f2f5; text-align: left; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #111827; color: #f9fafb; border-radius: 6px; padding: 12px; font-size: 12px; }
+details { margin: 10px 0; }
+summary { cursor: pointer; font-weight: 700; margin-bottom: 8px; }
+a { color: #195bd8; }
+@media (max-width: 900px) { .metrics { grid-template-columns: repeat(2, minmax(120px, 1fr)); } main { padding: 14px; } }
+</style>
+
+</head>
+<body>
+<main>
+<header>
+<h1>TravelAgent 批量规划测试报告</h1>
+<p>生成时间：2026-06-22T18:34:06 | MCP：amap | LLM：False | 最大重规划：1</p>
+</header>
+<section class="panel"><h2>总览</h2><table><thead><tr><th>案例</th><th>状态</th><th>问题</th><th>MCP 错误</th><th>路线</th><th>耗时</th></tr></thead><tbody><tr><td><a href="#case-1">Beijing to Shanxi Wutai Mountain</a></td><td><span class="badge ok">OK</span></td><td>1</td><td>0</td><td>8</td><td>67.4s</td></tr></tbody></table></section>
+<section id="case-2" class="panel"><h2>Beijing to Shanxi Wutai Mountain</h2><div class="metrics"><div><b>可最终化</b><span>质量门禁</span></div><div><b>1</b><span>问题</span></div><div><b>0</b><span>MCP 错误</span></div><div><b>8</b><span>路线结果</span></div><div><b>67.4s</b><span>耗时</span></div></div><p class="quality">No high or critical validation issues remain.</p><details open><summary>问题列表</summary><table><thead><tr><th>严重度</th><th>类型</th><th>Day</th><th>地点</th><th>原因</th><th>建议</th></tr></thead><tbody><tr><td>medium</td><td>incomplete_day_timeline</td><td>3</td><td>Xinzhou</td><td>Timeline covers only 997 minutes of the day.</td><td>Add sleep, meals, moves, rest, and buffers until the day is approximately covered.</td></tr></tbody></table></details><details><summary>MCP 错误</summary><p class="muted">无。</p></details><details><summary>Cache 统计</summary><pre>{
+  &quot;hits&quot;: 0,
+  &quot;misses&quot;: 17,
+  &quot;last_hits&quot;: 0,
+  &quot;last_misses&quot;: 8,
+  &quot;entries&quot;: 17,
+  &quot;skipped_existing_results&quot;: 6,
+  &quot;last_skipped_existing_results&quot;: 6
+}</pre></details><details><summary>路线骨架</summary><table><thead><tr><th>#</th><th>类型</th><th>路线</th><th>交通</th><th>分钟</th><th>km</th><th>备注</th></tr></thead><tbody><tr><td>1</td><td>outbound</td><td>北京 -> Xinzhou</td><td>train</td><td>334</td><td>440.86</td><td>Updated from MCP route data.</td></tr><tr><td>2</td><td>return</td><td>Xinzhou -> 北京</td><td>train</td><td>312</td><td>438.19</td><td>Updated from MCP route data.</td></tr></tbody></table></details><details open><summary>每日时间线</summary><h3>Day 1 | 2026-06-29 | Xinzhou</h3><p class="muted">住宿：五台山怡心雅院</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>北京</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>北京</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>08:15:00 - 13:49:00</td><td>move</td><td>outbound</td><td>北京 -&gt; Xinzhou</td><td>train</td><td>334</td><td>440.86</td></tr><tr><td>4</td><td>13:49:00 - 14:00:00</td><td>stay</td><td>meal</td><td>Xinzhou</td><td></td><td>11</td><td></td></tr><tr><td>5</td><td>14:34:00 - 16:44:00</td><td>move</td><td>local</td><td>Xinzhou -&gt; 五台山怡心雅院</td><td>taxi</td><td>130</td><td>129.78</td></tr><tr><td>6</td><td>16:44:00 - 17:01:00</td><td>move</td><td>local</td><td>五台山怡心雅院 -&gt; 五台山</td><td>taxi</td><td>17</td><td>9.26</td></tr><tr><td>7</td><td>17:01:00 - 18:27:00</td><td>stay</td><td>visit</td><td>五台山</td><td></td><td>86</td><td></td></tr><tr><td>8</td><td>18:27:00 - 18:45:00</td><td>move</td><td>local</td><td>五台山 -&gt; 五台山怡心雅院</td><td>taxi</td><td>18</td><td>9.18</td></tr><tr><td>9</td><td>18:45:00 - 19:10:00</td><td>stay</td><td>rest</td><td>五台山怡心雅院</td><td></td><td>25</td><td></td></tr><tr><td>10</td><td>19:10:00 - 20:10:00</td><td>stay</td><td>meal</td><td>五台山怡心雅院</td><td></td><td>60</td><td></td></tr><tr><td>11</td><td>20:10:00 - 23:10:00</td><td>stay</td><td>rest</td><td>五台山怡心雅院</td><td></td><td>180</td><td></td></tr><tr><td>12</td><td>23:10:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>五台山怡心雅院</td><td></td><td>49</td><td></td></tr></tbody></table>
+<h3>Day 2 | 2026-06-30 | Xinzhou</h3><p class="muted">住宿：五台山怡心雅院</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>五台山怡心雅院</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>五台山怡心雅院</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>09:00:00 - 09:17:00</td><td>move</td><td>local</td><td>五台山怡心雅院 -&gt; 五台山</td><td>taxi</td><td>17</td><td>9.26</td></tr><tr><td>4</td><td>09:35:00 - 11:35:00</td><td>stay</td><td>visit</td><td>五台山</td><td></td><td>120</td><td></td></tr><tr><td>5</td><td>11:35:00 - 12:07:00</td><td>move</td><td>local</td><td>五台山 -&gt; 五台山风景名胜区客堂</td><td>taxi</td><td>32</td><td>19.67</td></tr><tr><td>6</td><td>12:10:00 - 14:10:00</td><td>stay</td><td>visit</td><td>五台山风景名胜区客堂</td><td></td><td>120</td><td></td></tr><tr><td>7</td><td>14:10:00 - 14:26:00</td><td>move</td><td>local</td><td>五台山风景名胜区客堂 -&gt; 五台山怡心雅院</td><td>taxi</td><td>16</td><td>11.04</td></tr><tr><td>8</td><td>14:45:00 - 18:30:00</td><td>stay</td><td>rest</td><td>五台山怡心雅院</td><td></td><td>225</td><td></td></tr><tr><td>9</td><td>18:30:00 - 19:30:00</td><td>stay</td><td>meal</td><td>五台山怡心雅院</td><td></td><td>60</td><td></td></tr><tr><td>10</td><td>19:30:00 - 22:30:00</td><td>stay</td><td>rest</td><td>五台山怡心雅院</td><td></td><td>180</td><td></td></tr><tr><td>11</td><td>22:30:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>五台山怡心雅院</td><td></td><td>89</td><td></td></tr></tbody></table>
+<h3>Day 3 | 2026-07-01 | Xinzhou</h3><p class="muted">住宿：五台山怡心雅院</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>五台山怡心雅院</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>五台山怡心雅院</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>08:15:00 - 10:25:00</td><td>move</td><td>local</td><td>五台山怡心雅院 -&gt; Xinzhou</td><td>taxi</td><td>130</td><td>129.55</td></tr><tr><td>4</td><td>17:00:00 - 22:12:00</td><td>move</td><td>return</td><td>Xinzhou -&gt; 北京</td><td>train</td><td>312</td><td>438.19</td></tr><tr><td>5</td><td>22:12:00 - 23:12:00</td><td>stay</td><td>rest</td><td>北京</td><td></td><td>60</td><td></td></tr></tbody></table></details><details><summary>最终文本</summary><pre># 北京 to 山西 travel plan
+
+北京 -&gt; 山西
+
+## Route Skeleton
+
+- outbound: 北京 -&gt; Xinzhou by train, 2026-06-29 08:00 to 2026-06-29 13:34, 334 min
+- return: Xinzhou -&gt; 北京 by train, 2026-07-01 17:00 to 2026-07-01 22:12, 312 min
+
+## Accommodation
+
+- Xinzhou: 五台山怡心雅院, 2026-06-29 to 2026-07-02, near 五台山
+
+## Day 1 - 2026-06-29 - Xinzhou
+Accommodation area: 五台山怡心雅院
+- 00:00-07:30 STAY 北京 (sleep), 450 min
+- 07:30-08:15 STAY 北京 (meal), 45 min
+- 08:15-13:49 MOVE 北京 -&gt; Xinzhou by train, 334 min
+- 13:49-14:00 STAY Xinzhou (meal), 11 min
+- 14:34-16:44 MOVE Xinzhou -&gt; 五台山怡心雅院 by taxi, 130 min
+- 16:44-17:01 MOVE 五台山怡心雅院 -&gt; 五台山 by taxi, 17 min
+- 17:01-18:27 STAY 五台山 (visit), 86 min
+- 18:27-18:45 MOVE 五台山 -&gt; 五台山怡心雅院 by taxi, 18 min
+- 18:45-19:10 STAY 五台山怡心雅院 (rest), 25 min
+- 19:10-20:10 STAY 五台山怡心雅院 (meal), 60 min
+- 20:10-23:10 STAY 五台山怡心雅院 (rest), 180 min
+- 23:10-23:59 STAY 五台山怡心雅院 (sleep), 49 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 2 - 2026-06-30 - Xinzhou
+Accommodation area: 五台山怡心雅院
+- 00:00-07:30 STAY 五台山怡心雅院 (sleep), 450 min
+- 07:30-08:15 STAY 五台山怡心雅院 (meal), 45 min
+- 09:00-09:17 MOVE 五台山怡心雅院 -&gt; 五台山 by taxi, 17 min
+- 09:35-11:35 STAY 五台山 (visit), 120 min
+- 11:35-12:07 MOVE 五台山 -&gt; 五台山风景名胜区客堂 by taxi, 32 min
+- 12:10-14:10 STAY 五台山风景名胜区客堂 (visit), 120 min
+- 14:10-14:26 MOVE 五台山风景名胜区客堂 -&gt; 五台山怡心雅院 by taxi, 16 min
+- 14:45-18:30 STAY 五台山怡心雅院 (rest), 225 min
+- 18:30-19:30 STAY 五台山怡心雅院 (meal), 60 min
+- 19:30-22:30 STAY 五台山怡心雅院 (rest), 180 min
+- 22:30-23:59 STAY 五台山怡心雅院 (sleep), 89 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 3 - 2026-07-01 - Xinzhou
+Accommodation area: 五台山怡心雅院
+- 00:00-07:30 STAY 五台山怡心雅院 (sleep), 450 min
+- 07:30-08:15 STAY 五台山怡心雅院 (meal), 45 min
+- 08:15-10:25 MOVE 五台山怡心雅院 -&gt; Xinzhou by taxi, 130 min
+- 17:00-22:12 MOVE Xinzhou -&gt; 北京 by train, 312 min
+- 22:12-23:12 STAY 北京 (rest), 60 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Unresolved Issues
+
+- medium: Timeline covers only 997 minutes of the day. Suggested: Add sleep, meals, moves, rest, and buffers until the day is approximately covered.</pre></details><details><summary>原始输入</summary><pre>{
+  &quot;origin&quot;: &quot;北京&quot;,
+  &quot;destination&quot;: &quot;山西&quot;,
+  &quot;start_date&quot;: &quot;2026-06-29&quot;,
+  &quot;end_date&quot;: &quot;2026-07-01&quot;,
+  &quot;travelers&quot;: {
+    &quot;adults&quot;: 3,
+    &quot;children&quot;: 0,
+    &quot;children_need_bed&quot;: 0,
+    &quot;children_ages&quot;: []
+  },
+  &quot;budget_level&quot;: &quot;medium&quot;,
+  &quot;preferences&quot;: [
+    &quot;culture&quot;,
+    &quot;food&quot;,
+    &quot;relaxed&quot;,
+    &quot;family friendly&quot;
+  ],
+  &quot;must_visit&quot;: [
+    &quot;五台山&quot;
+  ],
+  &quot;avoid&quot;: [
+    &quot;late night activities&quot;,
+    &quot;overly packed schedule&quot;
+  ]
+}</pre></details></section>
+</main>
+</body>
+</html>

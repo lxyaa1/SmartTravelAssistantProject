@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from backend.agents.llm import _repair_payload_for_schema, should_use_llm
-from backend.schemas.trip import TripPlan
+from backend.schemas.trip import CityRoutePlan, TripPlan
 
 
 def test_should_use_llm_can_be_disabled_by_state_even_when_key_exists(monkeypatch) -> None:
@@ -22,6 +22,41 @@ def test_should_use_llm_can_be_disabled_by_env(monkeypatch) -> None:
     monkeypatch.setenv("TRAVEL_AGENT_USE_LLM", "false")
 
     assert should_use_llm({}) is False
+
+
+def test_repair_city_route_plan_payload_normalizes_combined_transport_mode() -> None:
+    raw = """
+    {
+      "origin": "Beijing",
+      "destination": "Shanxi",
+      "stays": [
+        {
+          "sequence": 1,
+          "city": "Xinzhou",
+          "start_date": "2026-07-01",
+          "end_date": "2026-07-02",
+          "anchor_places": ["Wutai Mountain"],
+          "lodging_anchor": "Wutai Mountain"
+        }
+      ],
+      "segments": [
+        {
+          "sequence": 1,
+          "segment_type": "outbound",
+          "origin": "Beijing",
+          "destination": "Xinzhou",
+          "origin_city": "Beijing",
+          "destination_city": "Xinzhou",
+          "mode": "taxi + train"
+        }
+      ]
+    }
+    """
+
+    repaired = _repair_payload_for_schema(raw, CityRoutePlan)
+    plan = CityRoutePlan.model_validate(repaired)
+
+    assert plan.segments[0].mode.value == "train"
 
 
 def test_repair_trip_plan_payload_splits_cross_midnight_sleep_timeline_items() -> None:
@@ -256,3 +291,55 @@ def test_repair_trip_plan_payload_clamps_overflow_times_and_repairs_enums() -> N
     assert day2.timeline[1].start_time >= day2.timeline[0].end_time
     assert day2.timeline[1].stay is not None
     assert day2.timeline[1].stay.purpose.value == "meal"
+
+
+def test_repair_trip_plan_payload_normalizes_combined_transport_modes() -> None:
+    raw = """
+    {
+      "title": "test",
+      "origin": "Beijing",
+      "destination": "Shanxi",
+      "route_segments": [
+        {
+          "sequence": 1,
+          "segment_type": "outbound",
+          "origin": "Beijing",
+          "destination": "Xinzhou",
+          "origin_city": "Beijing",
+          "destination_city": "Xinzhou",
+          "mode": "taxi + train"
+        }
+      ],
+      "days": [
+        {
+          "day": 1,
+          "date": "2026-07-01",
+          "city": "Xinzhou",
+          "timeline": [
+            {
+              "sequence": 1,
+              "item_type": "move",
+              "start_time": "08:00",
+              "end_time": "12:00",
+              "city": "Xinzhou",
+              "move": {
+                "origin": "Beijing",
+                "destination": "Xinzhou",
+                "origin_city": "Beijing",
+                "destination_city": "Xinzhou",
+                "mode": "taxi + train",
+                "purpose": "outbound"
+              }
+            }
+          ]
+        }
+      ]
+    }
+    """
+
+    repaired = _repair_payload_for_schema(raw, TripPlan)
+    plan = TripPlan.model_validate(repaired)
+
+    assert plan.route_segments[0].mode.value == "train"
+    assert plan.days[0].timeline[0].move is not None
+    assert plan.days[0].timeline[0].move.mode.value == "train"

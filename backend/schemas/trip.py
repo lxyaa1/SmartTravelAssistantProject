@@ -32,6 +32,7 @@ class PlaceCategory(str, Enum):
 
 
 class IssueType(str, Enum):
+    MISSING_MCP_DATA = "missing_mcp_data"
     MISSING_MUST_VISIT = "missing_must_visit"
     MISSING_RETURN_TRANSFER = "missing_return_transfer"
     BAD_WEATHER = "bad_weather"
@@ -429,6 +430,8 @@ class LodgingResult(BaseModel):
 class RouteResult(BaseModel):
     origin: str
     destination: str
+    origin_city: str = ""
+    destination_city: str = ""
     mode: TransportMode
     duration_minutes: int = Field(ge=0)
     distance_km: float = Field(ge=0)
@@ -440,6 +443,7 @@ class McpResults(BaseModel):
     routes: list[RouteResult] = Field(default_factory=list)
     accommodation_areas: list[AccommodationAreaResult] = Field(default_factory=list)
     lodging: list[LodgingResult] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
 
 
 class McpQuery(BaseModel):

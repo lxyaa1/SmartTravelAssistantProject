@@ -25,6 +25,20 @@ For the local UI:
 python -m streamlit run app/streamlit_app.py --server.port 8502
 ```
 
+For a static multi-case planning report:
+
+```powershell
+python scripts/batch_plan_report.py --backend mock --max-iterations 1
+```
+
+The script writes an HTML report to `data/reports/`. To run only the Shanxi case with live Amap MCP:
+
+```powershell
+python scripts/batch_plan_report.py --backend amap --case Shanxi --max-iterations 1
+```
+
+Add `--use-llm` when you want the LLM-backed planning nodes to run, and `--open` to open the generated HTML file in the default browser.
+
 ## LLM Configuration
 
 The project can use Alibaba Cloud Model Studio / DashScope through its OpenAI-compatible chat completions API.
@@ -140,7 +154,7 @@ get_attraction_detail       -> maps_text_search + maps_search_detail
 get_route_time              -> maps_geo + direction/distance tools
 ```
 
-If Amap MCP fails, the workflow records the error in `mcp_errors` and falls back to the local mock MCP data so the graph can still complete. To force mock MCP:
+If Amap MCP fails, the workflow records the error in `mcp_errors` and does not mix local mock data into the live result. Missing live data is treated as unverified MCP data during validation. To force mock MCP for local development:
 
 ```powershell
 $env:TRAVEL_AGENT_MCP_BACKEND="mock"

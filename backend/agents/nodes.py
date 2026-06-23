@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from copy import deepcopy
 from datetime import date, datetime, time, timedelta
 from typing import Any
@@ -203,15 +204,15 @@ def preplan_query_planner_node(state: TripState) -> TripState:
     for segment in city_route_plan.segments:
         queries.append(_route_query_from_segment(segment, McpQueryStage.PREPLAN))
 
-    output = PreplanQueryPlannerOutput(
-        query_plan=McpQueryPlan(
-            queries=_filter_queries_with_existing_results(
-                _dedupe_mcp_queries(queries),
-                state.get("mcp_results", McpResults()),
-            )
-        )
-    )
-    return {**state, "pending_mcp_queries": output.query_plan}
+    existing_results = state.get("mcp_results", McpResults())
+    deduped_queries = _dedupe_mcp_queries(queries)
+    filtered_queries = _filter_queries_with_existing_results(deduped_queries, existing_results)
+    output = PreplanQueryPlannerOutput(query_plan=McpQueryPlan(queries=filtered_queries))
+    return {
+        **state,
+        "pending_mcp_queries": output.query_plan,
+        "mcp_cache_stats": _update_skipped_existing_stats(state, len(deduped_queries) - len(filtered_queries)),
+    }
 
 
 def collect_mcp_data_node(state: TripState) -> TripState:
@@ -248,11 +249,15 @@ def collect_mcp_data_node(state: TripState) -> TripState:
                 default_city=agent_input.default_city,
             )
         except Exception as exc:
-            errors.append(f"Amap MCP failed, fell back to mock MCP: {exc}")
-            collected = _execute_mock_mcp_query_plan(agent_input.query_plan, agent_input.default_city)
+            errors.append(
+                "Amap MCP failed; live MCP batch was skipped and no mock data was mixed in: "
+                f"{_format_exception_detail(exc)}"
+            )
+            collected = McpResults()
     else:
         collected = _execute_mock_mcp_query_plan(agent_input.query_plan, agent_input.default_city)
 
+    errors.extend(collected.errors)
     for query in missing_queries:
         query_result = _extract_query_result_from_results(query, collected)
         if query_result is not None:
@@ -267,6 +272,8 @@ def collect_mcp_data_node(state: TripState) -> TripState:
         "last_hits": cache_hits,
         "last_misses": cache_misses,
         "entries": len(cache),
+        "skipped_existing_results": int(previous_stats.get("skipped_existing_results", 0)),
+        "last_skipped_existing_results": int(previous_stats.get("last_skipped_existing_results", 0)),
     }
     output = DataCollectorOutput(mcp_results=merged_results)
     return {
@@ -311,6 +318,7 @@ def plan_check_query_planner_node(state: TripState) -> TripState:
     agent_input = PlanCheckQueryPlannerInput(plan=state["current_plan"])
     plan = agent_input.plan
     queries: list[McpQuery] = []
+    accommodation_locations = _accommodation_locations_by_name(plan)
 
     for segment in plan.route_segments:
         queries.append(_route_query_from_segment(segment, McpQueryStage.PLAN_CHECK))
@@ -326,7 +334,11 @@ def plan_check_query_planner_node(state: TripState) -> TripState:
         )
         for item in day.timeline:
             if item.item_type == TimelineItemType.MOVE and item.move:
-                queries.append(_route_query_from_move(item.move, McpQueryStage.PLAN_CHECK))
+                if _move_has_unverified_endpoint(item.move):
+                    continue
+                route_query = _route_query_from_move(item.move, McpQueryStage.PLAN_CHECK)
+                _attach_known_endpoint_locations(route_query, accommodation_locations)
+                queries.append(route_query)
             if item.item_type == TimelineItemType.STAY and item.stay and item.stay.purpose == StayPurpose.VISIT:
                 queries.append(
                     McpQuery(
@@ -337,15 +349,15 @@ def plan_check_query_planner_node(state: TripState) -> TripState:
                     )
                 )
 
-    output = PlanCheckQueryPlannerOutput(
-        query_plan=McpQueryPlan(
-            queries=_filter_queries_with_existing_results(
-                _dedupe_mcp_queries(queries),
-                state.get("mcp_results", McpResults()),
-            )
-        )
-    )
-    return {**state, "pending_mcp_queries": output.query_plan}
+    existing_results = state.get("mcp_results", McpResults())
+    deduped_queries = _dedupe_mcp_queries(queries)
+    filtered_queries = _filter_queries_with_existing_results(deduped_queries, existing_results)
+    output = PlanCheckQueryPlannerOutput(query_plan=McpQueryPlan(queries=filtered_queries))
+    return {
+        **state,
+        "pending_mcp_queries": output.query_plan,
+        "mcp_cache_stats": _update_skipped_existing_stats(state, len(deduped_queries) - len(filtered_queries)),
+    }
 
 
 def validate_plan_node(state: TripState) -> TripState:
@@ -357,7 +369,7 @@ def validate_plan_node(state: TripState) -> TripState:
     request = agent_input.request
     plan = agent_input.plan
     mcp_results = agent_input.mcp_results
-    route_by_key = {(route.origin, route.destination, route.mode): route for route in mcp_results.routes}
+    route_by_key = {_route_result_key(route): route for route in mcp_results.routes}
     _apply_route_results_to_plan(plan, route_by_key)
     issues = _validate_plan(request, plan, mcp_results)
     quality_gate = _quality_gate_for_issues(issues)
@@ -373,9 +385,13 @@ def repair_strategy_planner_node(state: TripState) -> TripState:
         max_iterations=state.get("max_iterations", 3),
     )
     serious = [issue for issue in agent_input.issues if issue.severity in {Severity.HIGH, Severity.CRITICAL}]
+    missing_external_data = [issue for issue in serious if issue.issue_type == IssueType.MISSING_MCP_DATA]
     if not serious:
         action = RepairAction.FINALIZE
         reason = "No high or critical issues remain."
+    elif missing_external_data:
+        action = RepairAction.FINALIZE
+        reason = "Required MCP data is missing; do not replan from guessed or mock data."
     elif agent_input.iteration >= agent_input.max_iterations:
         action = RepairAction.FINALIZE
         reason = "Maximum replanning iterations reached; final output is provisional."
@@ -436,6 +452,16 @@ def final_writer_node(state: TripState) -> TripState:
     )
     plan = agent_input.plan
     lines = [f"# {plan.title}", "", f"{plan.origin} -> {plan.destination}", ""]
+    if not plan.quality_gate.can_finalize:
+        lines.extend(
+            [
+                "## 状态",
+                "",
+                "当前计划还不能作为可执行行程使用，因为仍有必须解决的校验问题。",
+                plan.quality_gate.reason,
+                "",
+            ]
+        )
 
     if plan.route_segments:
         lines.extend(["## Route Skeleton", ""])
@@ -608,6 +634,7 @@ def _normalize_city_route_plan(plan: CityRoutePlan, request: TripRequest) -> Cit
         plan.segments.extend([segment for segment in fallback.segments if segment.segment_type == SegmentType.RETURN])
     for index, segment in enumerate(plan.segments, start=1):
         segment.sequence = index
+        _fill_segment_city_context(segment, plan, request)
     return plan
 
 
@@ -670,7 +697,7 @@ def _build_accommodations(
     accommodations: list[AccommodationStay] = []
     for stay in city_route_plan.stays:
         lodging = _best_lodging_for_anchor(mcp_results, stay.city, stay.lodging_anchor)
-        area = lodging.area if lodging else _preferred_accommodation_area(mcp_results, stay.city)
+        area = lodging.area if lodging else _preferred_accommodation_area(mcp_results, stay.city, stay.lodging_anchor)
         name = lodging.name if lodging else area
         accommodations.append(
             AccommodationStay(
@@ -702,6 +729,7 @@ def _build_day_timeline(
 ) -> list[TimelineItem]:
     items: list[TimelineItem] = []
     cursor = 0
+    lodging_is_unverified = bool(accommodation and _is_unverified_lodging_label(accommodation.hotel_name))
 
     def add_stay(
         start_minute: int,
@@ -744,10 +772,16 @@ def _build_day_timeline(
         purpose: MovePurpose,
         cost: float = 0,
         distance_km: float = 0,
+        origin_city: str | None = None,
+        destination_city: str | None = None,
         notes: str = "",
     ) -> int:
+        if start_minute >= 23 * 60 + 59:
+            return 23 * 60 + 59
         duration = max(1, duration_minutes)
         end_minute = min(23 * 60 + 59, start_minute + duration)
+        if end_minute <= start_minute:
+            return start_minute
         items.append(
             TimelineItem(
                 sequence=len(items) + 1,
@@ -758,8 +792,8 @@ def _build_day_timeline(
                 move=MoveDetail(
                     origin=origin,
                     destination=destination,
-                    origin_city=origin,
-                    destination_city=destination,
+                    origin_city=origin_city or city,
+                    destination_city=destination_city or city,
                     mode=mode,
                     purpose=purpose,
                     duration_minutes=end_minute - start_minute,
@@ -778,6 +812,24 @@ def _build_day_timeline(
     for segment in _segments_for_date(route_segments, current_date):
         start = max(cursor, _time_to_minutes(segment.departure_time) if segment.departure_time else cursor)
         purpose = _move_purpose_from_segment(segment.segment_type)
+        if segment.segment_type == SegmentType.RETURN and accommodation and not _locations_equivalent(
+            segment.origin,
+            accommodation.hotel_name,
+        ):
+            transfer_start = min(cursor, max(cursor, start - 25))
+            cursor = add_move(
+                transfer_start,
+                _route_duration_for(mcp_results, accommodation.hotel_name, segment.origin, TransportMode.TAXI, fallback=25),
+                accommodation.hotel_name,
+                segment.origin,
+                TransportMode.TAXI,
+                MovePurpose.LOCAL,
+                cost=35,
+                origin_city=city,
+                destination_city=segment.origin_city or city,
+                notes="Lodging to return departure point.",
+            )
+            start = max(cursor, start)
         cursor = add_move(
             start,
             segment.estimated_duration_minutes or 180,
@@ -787,6 +839,8 @@ def _build_day_timeline(
             purpose,
             cost=segment.estimated_cost,
             distance_km=segment.estimated_distance_km,
+            origin_city=segment.origin_city or segment.origin,
+            destination_city=segment.destination_city or segment.destination,
             notes=segment.booking_notes or segment.notes,
         )
         if segment.segment_type == SegmentType.RETURN:
@@ -795,13 +849,26 @@ def _build_day_timeline(
             break
         add_stay(cursor, min(14 * 60, cursor + 45), "Meal or arrival buffer", StayPurpose.MEAL, PlaceCategory.FOOD)
         cursor = max(cursor + 45, 13 * 60)
-        if accommodation:
+        if accommodation and not lodging_is_unverified:
+            if not _locations_equivalent(accommodation.hotel_name, segment.destination):
+                cursor = add_move(
+                    cursor,
+                    _route_duration_for(mcp_results, segment.destination, accommodation.hotel_name, TransportMode.TAXI, fallback=25),
+                    segment.destination,
+                    accommodation.hotel_name,
+                    TransportMode.TAXI,
+                    MovePurpose.LOCAL,
+                    cost=35,
+                    origin_city=segment.destination_city or city,
+                    destination_city=city,
+                    notes="Arrival point to lodging.",
+                )
             add_stay(cursor, min(cursor + 30, 14 * 60), accommodation.hotel_name, StayPurpose.HOTEL_CHECKIN)
             cursor = max(cursor + 30, 14 * 60)
 
     if not any(item.move and item.move.purpose == MovePurpose.RETURN for item in items):
         visit_candidates = _visits_for_date(request, city_route_plan, mcp_results, current_date, city)
-        lodging_name = accommodation.hotel_name if accommodation else (f"{city} city center")
+        lodging_name = accommodation.hotel_name if accommodation and not lodging_is_unverified else city
         for index, place in enumerate(visit_candidates):
             detail = _attraction_detail_for(mcp_results, place, city, current_date)
             category = detail.category if detail else _category_for_place(place, mcp_results, PlaceCategory.OUTDOOR)
@@ -809,9 +876,23 @@ def _build_day_timeline(
             if cursor < 9 * 60:
                 cursor = 9 * 60
             if index == 0:
+                travel_minutes = _route_duration_for(mcp_results, lodging_name, place, TransportMode.TAXI, fallback=35)
+            elif items and items[-1].stay:
+                travel_minutes = _route_duration_for(
+                    mcp_results,
+                    items[-1].stay.place_name,
+                    place,
+                    TransportMode.TAXI,
+                    fallback=35,
+                )
+            else:
+                travel_minutes = 0
+            if cursor + travel_minutes + min(recommended, 45) > 18 * 60:
+                break
+            if index == 0:
                 cursor = add_move(
                     cursor,
-                    _route_duration_for(mcp_results, lodging_name, place, TransportMode.TAXI, fallback=35),
+                    travel_minutes,
                     lodging_name,
                     place,
                     TransportMode.TAXI,
@@ -823,7 +904,7 @@ def _build_day_timeline(
                 previous_place = items[-1].stay.place_name
                 cursor = add_move(
                     cursor,
-                    _route_duration_for(mcp_results, previous_place, place, TransportMode.TAXI, fallback=35),
+                    travel_minutes,
                     previous_place,
                     place,
                     TransportMode.TAXI,
@@ -846,7 +927,13 @@ def _build_day_timeline(
             if cursor >= 17 * 60:
                 break
 
-        if items and items[-1].stay and items[-1].stay.purpose == StayPurpose.VISIT and current_date < request.end_date:
+        if (
+            items
+            and items[-1].stay
+            and items[-1].stay.purpose == StayPurpose.VISIT
+            and current_date < request.end_date
+            and not lodging_is_unverified
+        ):
             cursor = add_move(
                 cursor,
                 _route_duration_for(mcp_results, items[-1].stay.place_name, lodging_name, TransportMode.TAXI, fallback=35),
@@ -891,7 +978,10 @@ def _visits_for_date(
     optional = [
         attraction.name
         for attraction in mcp_results.attractions
-        if attraction.city == city and attraction.date is None and attraction.name not in visits
+        if attraction.city == city
+        and attraction.date is None
+        and attraction.name not in visits
+        and _attraction_matches_city_anchor(attraction.name, city_anchors)
     ]
     visits.extend(optional[:2])
 
@@ -910,6 +1000,9 @@ def _normalize_plan_after_generation(
 ) -> None:
     if not plan.route_segments:
         plan.route_segments = [segment.model_copy(deep=True) for segment in city_route_plan.segments]
+    for index, segment in enumerate(plan.route_segments, start=1):
+        segment.sequence = index
+        _fill_segment_city_context(segment, city_route_plan, request)
     _apply_route_results_to_segments(plan.route_segments, mcp_results)
 
     if not plan.accommodations:
@@ -957,8 +1050,21 @@ def _normalize_plan_after_generation(
             )
         day.timeline = _dedupe_and_sort_timeline(day.timeline)
         _sync_local_move_endpoints(day)
+        _fill_day_move_city_context(day, request, city_route_plan)
+        _normalize_passive_boundary_stays(day, request, plan.days)
+        _normalize_passive_stay_locations(day)
+        _repair_day_timeline_continuity(day)
+        _remove_unverified_lodging_moves(day)
+        _remove_same_location_moves(day)
+        _fit_day_timeline_sequentially(day)
         if not day.accommodation_area and day.city in accommodation_by_city:
             day.accommodation_area = accommodation_by_city[day.city].hotel_name
+        _recalculate_day_totals(day)
+    _repair_cross_day_timeline_continuity(plan)
+    for day in plan.days:
+        _remove_unverified_lodging_moves(day)
+        _remove_same_location_moves(day)
+        _fit_day_timeline_sequentially(day)
         _recalculate_day_totals(day)
     _recalculate_plan_totals(plan)
 
@@ -988,6 +1094,9 @@ def _move_rainy_outdoor_visits(plan: TripPlan, request: TripRequest, mcp_results
         for item in day.timeline:
             if not item.stay or item.stay.purpose != StayPurpose.VISIT or item.stay.category != PlaceCategory.OUTDOOR:
                 continue
+            if any(_place_matches_any(required, [item.stay.place_name]) for required in request.must_visit):
+                item.stay.notes = "Must-visit outdoor stop retained despite bad weather; user should confirm risk."
+                continue
             replacement = _select_indoor_attraction(mcp_results, day.city, excluded={item.stay.place_name})
             original_place = item.stay.place_name
             if replacement:
@@ -995,9 +1104,12 @@ def _move_rainy_outdoor_visits(plan: TripPlan, request: TripRequest, mcp_results
                 item.stay.category = replacement.category
                 item.stay.estimated_cost = replacement.ticket_price
                 item.stay.notes = "Replaced outdoor visit because of bad weather."
-            next_day = _next_non_rain_day(plan, day.day, day.city, mcp_results)
-            if next_day and any(_place_matches_any(original_place, [required]) for required in request.must_visit):
-                _replace_optional_visit(next_day, original_place, mcp_results)
+            else:
+                item.stay.place_name = day.accommodation_area or day.overnight_accommodation or day.city
+                item.stay.purpose = StayPurpose.REST
+                item.stay.category = PlaceCategory.HOTEL_AREA
+                item.stay.estimated_cost = 0
+                item.stay.notes = f"Removed {original_place} because of bad weather; no verified indoor replacement was available."
     for day in plan.days:
         _resequence_timeline(day.timeline)
 
@@ -1009,7 +1121,12 @@ def _repair_lodging_and_local_moves(plan: TripPlan, mcp_results: McpResults) -> 
             continue
         lodging = _best_lodging_for_anchor(mcp_results, day.city, first_visit.stay.place_name)
         if lodging is None:
+            if _day_has_unreliable_lodging_routes(day):
+                _mark_lodging_unresolved(day, first_visit.stay.place_name)
+                _fit_day_timeline_sequentially(day)
+                _recalculate_day_totals(day)
             continue
+        previous_lodging = day.accommodation_area
         day.accommodation_area = lodging.name
         if day.overnight_accommodation:
             day.overnight_accommodation = lodging.name
@@ -1017,11 +1134,20 @@ def _repair_lodging_and_local_moves(plan: TripPlan, mcp_results: McpResults) -> 
             if item.stay and item.stay.purpose in {StayPurpose.SLEEP, StayPurpose.REST, StayPurpose.HOTEL_CHECKIN, StayPurpose.HOTEL_CHECKOUT}:
                 item.stay.place_name = lodging.name
             if item.move and item.move.purpose == MovePurpose.LOCAL:
-                if _place_matches_any(item.move.origin, [day.accommodation_area or "", "hotel", "lodging"]):
+                if _endpoint_is_lodging_reference(item.move.origin, previous_lodging) or _endpoint_is_lodging_reference(
+                    item.move.origin,
+                    day.accommodation_area,
+                ):
                     item.move.origin = lodging.name
-                if _place_matches_any(item.move.destination, [day.accommodation_area or "", "hotel", "lodging"]):
+                if _endpoint_is_lodging_reference(item.move.destination, previous_lodging) or _endpoint_is_lodging_reference(
+                    item.move.destination,
+                    day.accommodation_area,
+                ):
                     item.move.destination = lodging.name
-                if _place_matches_any(first_visit.stay.place_name, [item.move.origin, item.move.destination]):
+                if _locations_equivalent(first_visit.stay.place_name, item.move.origin) or _locations_equivalent(
+                    first_visit.stay.place_name,
+                    item.move.destination,
+                ):
                     item.move.duration_minutes = max(10, lodging.duration_to_anchor_minutes or 15)
                     item.move.distance_km = lodging.distance_to_anchor_km or 2
                     item.end_time = _shift_time(item.start_time, item.move.duration_minutes)
@@ -1082,14 +1208,29 @@ def _replace_optional_visit(day: PlanDay, place: str, mcp_results: McpResults) -
             return
 
 
+def _attraction_matches_city_anchor(attraction_name: str, anchors: list[str]) -> bool:
+    if not anchors:
+        return True
+    normalized_attraction = _normalize_place_name(attraction_name)
+    normalized_anchors = [_normalize_place_name(anchor) for anchor in anchors]
+    if any(anchor == normalized_attraction or anchor in normalized_attraction for anchor in normalized_anchors):
+        return True
+    if "wutai" in normalized_anchors:
+        return "wutai" in normalized_attraction or "taihuai" in normalized_attraction
+    return True
+
+
 def _validate_plan(request: TripRequest, plan: TripPlan, mcp_results: McpResults) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
+    route_by_key = {_route_result_key(route): route for route in mcp_results.routes}
     planned_places = [
         item.stay.place_name
         for day in plan.days
         for item in day.timeline
         if item.stay and item.stay.purpose == StayPurpose.VISIT
     ]
+
+    _validate_route_segments_have_mcp_data(plan, route_by_key, issues)
 
     for required_place in request.must_visit:
         if not _place_matches_any(required_place, planned_places):
@@ -1105,6 +1246,18 @@ def _validate_plan(request: TripRequest, plan: TripPlan, mcp_results: McpResults
 
     for day in plan.days:
         _validate_timeline_order(day, issues)
+        _validate_timeline_continuity(day, issues)
+        if day.accommodation_area and _is_unverified_lodging_label(day.accommodation_area):
+            issues.append(
+                ValidationIssue(
+                    issue_type=IssueType.MISSING_MCP_DATA,
+                    severity=Severity.HIGH,
+                    date=day.date,
+                    locations=[day.accommodation_area],
+                    reason="No verified lodging candidate with usable location data is available for this day.",
+                    suggested_action="Fetch a real lodging candidate near the main anchor before finalizing the plan.",
+                )
+            )
         covered_minutes = _covered_timeline_minutes(day.timeline)
         if covered_minutes < 20 * 60:
             issues.append(
@@ -1120,11 +1273,12 @@ def _validate_plan(request: TripRequest, plan: TripPlan, mcp_results: McpResults
             )
         for item in day.timeline:
             if item.stay and item.stay.purpose == StayPurpose.VISIT:
-                _validate_visit_item(day, item, mcp_results, issues)
+                _validate_visit_item(day, item, request, mcp_results, issues)
             if item.move:
-                _validate_move_item(day, item, request, issues)
+                _validate_move_item(day, item, request, route_by_key, issues)
 
     if request.origin != request.destination:
+        _validate_trip_boundary_and_flow(request, plan, issues)
         has_return = any(
             item.move and item.move.purpose == MovePurpose.RETURN and _place_matches_any(request.origin, [item.move.destination])
             for day in plan.days
@@ -1142,27 +1296,66 @@ def _validate_plan(request: TripRequest, plan: TripPlan, mcp_results: McpResults
                     suggested_action="Add a final-day return move with departure and arrival time.",
                 )
             )
+        _validate_return_position(request, plan, issues)
 
     return issues
+
+
+def _validate_route_segments_have_mcp_data(
+    plan: TripPlan,
+    route_by_key: dict[tuple[str, str, TransportMode, str, str], RouteResult],
+    issues: list[ValidationIssue],
+) -> None:
+    for segment in plan.route_segments:
+        route = _find_route_result(
+            route_by_key,
+            segment.origin,
+            segment.destination,
+            segment.mode,
+            segment.origin_city,
+            segment.destination_city,
+        )
+        if route is not None:
+            continue
+        issues.append(
+            ValidationIssue(
+                issue_type=IssueType.MISSING_MCP_DATA,
+                severity=Severity.HIGH,
+                day=None,
+                date=segment.departure_date,
+                locations=[segment.origin, segment.destination],
+                reason=(
+                    "Route segment has no matching MCP route result; "
+                    f"{segment.origin} -> {segment.destination} by {segment.mode.value} is unverified."
+                ),
+                suggested_action="Re-query this route with concrete origin_city and destination_city, or mark the plan as not executable.",
+            )
+        )
 
 
 def _validate_visit_item(
     day: PlanDay,
     item: TimelineItem,
+    request: TripRequest,
     mcp_results: McpResults,
     issues: list[ValidationIssue],
 ) -> None:
     assert item.stay is not None
     if item.stay.category == PlaceCategory.OUTDOOR and _is_bad_weather(mcp_results, day.city, day.date):
+        is_must_visit = any(_place_matches_any(required, [item.stay.place_name]) for required in request.must_visit)
         issues.append(
             ValidationIssue(
                 issue_type=IssueType.BAD_WEATHER,
-                severity=Severity.HIGH,
+                severity=Severity.MEDIUM if is_must_visit else Severity.HIGH,
                 day=day.day,
                 date=day.date,
                 locations=[item.stay.place_name],
                 reason=f"{item.stay.place_name} is outdoor while {day.city} has bad weather on {day.date}.",
-                suggested_action="Move the outdoor visit to a better-weather day or replace it with an indoor stay.",
+                suggested_action=(
+                    "Keep only if the user accepts weather risk, or move it to a better-weather day."
+                    if is_must_visit
+                    else "Move the outdoor visit to a better-weather day or replace it with an indoor stay."
+                ),
             )
         )
 
@@ -1185,15 +1378,71 @@ def _validate_move_item(
     day: PlanDay,
     item: TimelineItem,
     request: TripRequest,
+    route_by_key: dict[tuple[str, str, TransportMode, str, str], RouteResult],
     issues: list[ValidationIssue],
 ) -> None:
     assert item.move is not None
+    route = _find_route_result(
+        route_by_key,
+        item.move.origin,
+        item.move.destination,
+        item.move.mode,
+        item.move.origin_city,
+        item.move.destination_city,
+    )
+    if route is None:
+        issues.append(
+            ValidationIssue(
+                issue_type=IssueType.MISSING_MCP_DATA,
+                severity=Severity.HIGH,
+                day=day.day,
+                date=day.date,
+                locations=[item.move.origin, item.move.destination],
+                reason=(
+                    "Timeline move has no matching MCP route result; "
+                    f"{item.move.origin} -> {item.move.destination} by {item.move.mode.value} is unverified."
+                ),
+                suggested_action="Do not use guessed durations; collect MCP route data or mark this transfer as unverified.",
+            )
+        )
     duration = item.move.duration_minutes or item.duration_minutes
-    if item.move.purpose == MovePurpose.LOCAL and duration > 90:
+    distance = item.move.distance_km
+    cross_city = _move_crosses_cities(item.move)
+    explicit_station_or_lodging_transfer = _is_station_or_lodging_transfer(item.move, day)
+    if cross_city and 0 < distance < 50:
+        issues.append(
+            ValidationIssue(
+                issue_type=IssueType.INFEASIBLE_PLAN,
+                severity=Severity.HIGH,
+                day=day.day,
+                date=day.date,
+                locations=[item.move.origin, item.move.destination],
+                reason=(
+                    f"Cross-city route result is suspicious: "
+                    f"{item.move.origin_city or item.move.origin} -> "
+                    f"{item.move.destination_city or item.move.destination} is only {distance} km."
+                ),
+                suggested_action="Re-query route with explicit origin_city and destination_city, then rebuild this transfer.",
+            )
+        )
+    if not cross_city and item.move.purpose == MovePurpose.LOCAL and distance > 120 and not explicit_station_or_lodging_transfer:
         issues.append(
             ValidationIssue(
                 issue_type=IssueType.ROUTE_TOO_LONG,
                 severity=Severity.HIGH,
+                day=day.day,
+                date=day.date,
+                locations=[item.move.origin, item.move.destination],
+                reason=f"Local route distance is suspiciously long at {distance} km.",
+                suggested_action="Choose lodging and visits within the same city area, or convert this to an intercity transfer.",
+            )
+        )
+    if item.move.purpose == MovePurpose.LOCAL and duration > 90 and not explicit_station_or_lodging_transfer:
+        severity = Severity.HIGH if duration > 120 else Severity.MEDIUM
+        issues.append(
+            ValidationIssue(
+                issue_type=IssueType.ROUTE_TOO_LONG,
+                severity=severity,
                 day=day.day,
                 date=day.date,
                 locations=[item.move.origin, item.move.destination],
@@ -1202,10 +1451,11 @@ def _validate_move_item(
             )
         )
     if item.move.purpose in {MovePurpose.OUTBOUND, MovePurpose.INTERCITY, MovePurpose.RETURN} and duration > 360:
+        severity = Severity.HIGH if duration > 720 else Severity.MEDIUM
         issues.append(
             ValidationIssue(
                 issue_type=IssueType.ROUTE_TOO_LONG,
-                severity=Severity.MEDIUM,
+                severity=severity,
                 day=day.day,
                 date=day.date,
                 locations=[item.move.origin, item.move.destination],
@@ -1213,13 +1463,17 @@ def _validate_move_item(
                 suggested_action="Reserve more of the day for transfer or choose a nearer base city.",
             )
         )
-    if item.move.purpose == MovePurpose.LOCAL and day.accommodation_area:
-        touches_lodging = _place_matches_any(day.accommodation_area, [item.move.origin, item.move.destination])
+    if item.move.purpose == MovePurpose.LOCAL and day.accommodation_area and not explicit_station_or_lodging_transfer:
+        touches_lodging = _locations_equivalent(day.accommodation_area, item.move.origin) or _locations_equivalent(
+            day.accommodation_area,
+            item.move.destination,
+        )
         if touches_lodging and duration > 60:
+            severity = Severity.HIGH if duration > 120 else Severity.MEDIUM
             issues.append(
                 ValidationIssue(
                     issue_type=IssueType.LODGING_TOO_FAR,
-                    severity=Severity.HIGH,
+                    severity=severity,
                     day=day.day,
                     date=day.date,
                     locations=[day.accommodation_area, item.move.origin, item.move.destination],
@@ -1239,7 +1493,12 @@ def _validate_move_item(
                 suggested_action="Use concrete stations, lodging names, or attraction names as endpoints.",
             )
         )
-    if request.travelers.has_children_or_infants and item.move.purpose == MovePurpose.LOCAL and duration > 90:
+    if (
+        request.travelers.has_children_or_infants
+        and item.move.purpose == MovePurpose.LOCAL
+        and duration > 90
+        and not explicit_station_or_lodging_transfer
+    ):
         issues.append(
             ValidationIssue(
                 issue_type=IssueType.LONG_TRANSFER_WITH_CHILDREN,
@@ -1272,36 +1531,292 @@ def _validate_timeline_order(day: PlanDay, issues: list[ValidationIssue]) -> Non
         previous = item
 
 
+def _validate_timeline_continuity(day: PlanDay, issues: list[ValidationIssue]) -> None:
+    ordered = sorted(day.timeline, key=lambda item: item.sequence)
+    for previous, current in zip(ordered, ordered[1:]):
+        if (
+            previous.move
+            and current.stay
+            and _should_validate_stay_location(current.stay)
+            and not _place_matches_any(previous.move.destination, _stay_location_names(current.stay, day))
+        ):
+            issues.append(
+                ValidationIssue(
+                    issue_type=IssueType.INFEASIBLE_PLAN,
+                    severity=Severity.HIGH,
+                    day=day.day,
+                    date=day.date,
+                    locations=[previous.move.destination, current.stay.place_name],
+                    reason="Move destination does not match the following stay location.",
+                    suggested_action="Rebuild the timeline so every move arrives at the next stay location.",
+                )
+            )
+        if (
+            previous.stay
+            and current.move
+            and _should_validate_stay_location(previous.stay)
+            and not _place_matches_any(current.move.origin, _stay_location_names(previous.stay, day))
+        ):
+            issues.append(
+                ValidationIssue(
+                    issue_type=IssueType.INFEASIBLE_PLAN,
+                    severity=Severity.HIGH,
+                    day=day.day,
+                    date=day.date,
+                    locations=[previous.stay.place_name, current.move.origin],
+                    reason="Move origin does not match the previous stay location.",
+                    suggested_action="Rebuild the timeline so every move starts from the previous stay location.",
+                )
+            )
+        if previous.move and current.move and not _location_names_match(
+            _timeline_primary_end_location_names(previous, day),
+            _timeline_primary_start_location_names(current, day),
+        ):
+            issues.append(
+                ValidationIssue(
+                    issue_type=IssueType.INFEASIBLE_PLAN,
+                    severity=Severity.HIGH,
+                    day=day.day,
+                    date=day.date,
+                    locations=[previous.move.destination, current.move.origin],
+                    reason="Adjacent moves do not connect: previous destination differs from next origin.",
+                    suggested_action="Insert a local transfer or correct move endpoints before using this timeline.",
+                )
+            )
+        if (
+            previous.stay
+            and current.stay
+            and _should_validate_stay_location(previous.stay)
+            and _should_validate_stay_location(current.stay)
+            and not _location_names_match(
+                _timeline_primary_end_location_names(previous, day),
+                _timeline_primary_start_location_names(current, day),
+            )
+        ):
+            issues.append(
+                ValidationIssue(
+                    issue_type=IssueType.INFEASIBLE_PLAN,
+                    severity=Severity.HIGH,
+                    day=day.day,
+                    date=day.date,
+                    locations=[previous.stay.place_name, current.stay.place_name],
+                    reason="Adjacent stays do not connect and no move is scheduled between them.",
+                    suggested_action="Insert a move item or merge stays at the same concrete location.",
+                )
+            )
+
+
+def _validate_trip_boundary_and_flow(request: TripRequest, plan: TripPlan, issues: list[ValidationIssue]) -> None:
+    items = _chronological_timeline_items(plan)
+    if not items:
+        return
+
+    first_day, first_item = items[0]
+    if not _location_names_match([request.origin], _timeline_start_location_names(first_item, first_day)):
+        issues.append(
+            ValidationIssue(
+                issue_type=IssueType.INFEASIBLE_PLAN,
+                severity=Severity.CRITICAL,
+                day=first_day.day,
+                date=first_day.date,
+                locations=[request.origin, *_timeline_start_location_names(first_item, first_day)],
+                reason="The first chronological timeline item does not start at the trip origin.",
+                suggested_action="Start day 1 at the user's origin, then add the outbound move before destination lodging or visits.",
+            )
+        )
+
+    last_day, last_item = items[-1]
+    if not _location_names_match([request.origin], _timeline_end_location_names(last_item, last_day)):
+        issues.append(
+            ValidationIssue(
+                issue_type=IssueType.MISSING_RETURN_TRANSFER,
+                severity=Severity.CRITICAL,
+                day=last_day.day,
+                date=last_day.date,
+                locations=[request.origin, *_timeline_end_location_names(last_item, last_day)],
+                reason="The last chronological timeline item does not end at the trip origin.",
+                suggested_action="End the itinerary at the user's origin after an explicit return move.",
+            )
+        )
+
+    for (previous_day, previous_item), (current_day, current_item) in zip(items, items[1:]):
+        previous_locations = _timeline_primary_end_location_names(previous_item, previous_day)
+        current_locations = _timeline_primary_start_location_names(current_item, current_day)
+        if _location_names_match(previous_locations, current_locations):
+            continue
+        issues.append(
+            ValidationIssue(
+                issue_type=IssueType.INFEASIBLE_PLAN,
+                severity=Severity.HIGH,
+                day=current_day.day,
+                date=current_day.date,
+                locations=[*previous_locations, *current_locations],
+                reason="Adjacent timeline items do not connect: previous end location differs from next start location.",
+                suggested_action="Insert a move item or correct endpoints so each item starts where the previous item ended.",
+            )
+        )
+
+
+def _validate_return_position(request: TripRequest, plan: TripPlan, issues: list[ValidationIssue]) -> None:
+    returned = False
+    for day in sorted(plan.days, key=lambda current: (current.date, current.day)):
+        for item in sorted(day.timeline, key=lambda current: current.sequence):
+            if returned and not _timeline_item_is_at_origin(item, request.origin):
+                issues.append(
+                    ValidationIssue(
+                        issue_type=IssueType.MISSING_RETURN_TRANSFER,
+                        severity=Severity.HIGH,
+                        day=day.day,
+                        date=day.date,
+                        locations=[request.origin, day.city],
+                        reason="Timeline continues away from the origin after the return move.",
+                        suggested_action="Place the return move at the true end of the trip or remove later destination activities.",
+                    )
+                )
+                return
+            if item.move and item.move.purpose == MovePurpose.RETURN and _place_matches_any(request.origin, [item.move.destination]):
+                returned = True
+
+
+def _timeline_item_is_at_origin(item: TimelineItem, origin: str) -> bool:
+    if item.move:
+        return _place_matches_any(origin, [item.move.origin, item.move.origin_city])
+    if item.stay:
+        return _place_matches_any(origin, [item.stay.place_name, item.stay.city])
+    return False
+
+
+def _chronological_timeline_items(plan: TripPlan) -> list[tuple[PlanDay, TimelineItem]]:
+    return _chronological_day_items(plan.days)
+
+
+def _chronological_day_items(days: list[PlanDay]) -> list[tuple[PlanDay, TimelineItem]]:
+    pairs: list[tuple[PlanDay, TimelineItem]] = []
+    for day in sorted(days, key=lambda current: (current.date, current.day)):
+        for item in sorted(day.timeline, key=lambda current: (_time_to_minutes(current.start_time), current.sequence)):
+            pairs.append((day, item))
+    return pairs
+
+
+def _timeline_start_location_names(item: TimelineItem, day: PlanDay) -> list[str]:
+    if item.move:
+        return [name for name in [item.move.origin, item.move.origin_city] if name]
+    if item.stay:
+        return _stay_location_names(item.stay, day)
+    return [day.city]
+
+
+def _timeline_primary_start_location_names(item: TimelineItem, day: PlanDay) -> list[str]:
+    if item.move:
+        return [item.move.origin]
+    if item.stay:
+        return [item.stay.place_name]
+    return [day.city]
+
+
+def _timeline_end_location_names(item: TimelineItem, day: PlanDay) -> list[str]:
+    if item.move:
+        return [name for name in [item.move.destination, item.move.destination_city] if name]
+    if item.stay:
+        return _stay_location_names(item.stay, day)
+    return [day.city]
+
+
+def _timeline_primary_end_location_names(item: TimelineItem, day: PlanDay) -> list[str]:
+    if item.move:
+        return [item.move.destination]
+    if item.stay:
+        return [item.stay.place_name]
+    return [day.city]
+
+
+def _location_names_match(first: list[str], second: list[str]) -> bool:
+    return any(_locations_equivalent(left, right) for left in first for right in second if left and right)
+
+
+def _locations_equivalent(left: str, right: str) -> bool:
+    normalized_left = _normalize_place_name(left)
+    normalized_right = _normalize_place_name(right)
+    return bool(normalized_left and normalized_right and normalized_left == normalized_right)
+
+
+def _stay_location_names(stay: StayDetail, day: PlanDay) -> list[str]:
+    names = [stay.place_name, stay.city]
+    if stay.purpose in {StayPurpose.SLEEP, StayPurpose.REST, StayPurpose.HOTEL_CHECKIN, StayPurpose.HOTEL_CHECKOUT}:
+        names.extend([day.accommodation_area or "", day.overnight_accommodation or ""])
+    return [name for name in names if name]
+
+
+def _should_validate_stay_location(stay: StayDetail) -> bool:
+    return stay.purpose in {
+        StayPurpose.VISIT,
+        StayPurpose.SLEEP,
+        StayPurpose.HOTEL_CHECKIN,
+        StayPurpose.HOTEL_CHECKOUT,
+    }
+
+
+def _move_crosses_cities(move: MoveDetail) -> bool:
+    if move.purpose in {MovePurpose.OUTBOUND, MovePurpose.INTERCITY, MovePurpose.RETURN}:
+        return True
+    return bool(move.origin_city and move.destination_city and move.origin_city != move.destination_city)
+
+
 def _apply_route_results_to_plan(
     plan: TripPlan,
-    route_by_key: dict[tuple[str, str, TransportMode], RouteResult],
+    route_by_key: dict[tuple[str, str, TransportMode, str, str], RouteResult],
 ) -> None:
     for segment in plan.route_segments:
-        route = route_by_key.get((segment.origin, segment.destination, segment.mode))
+        route = _find_route_result(
+            route_by_key,
+            segment.origin,
+            segment.destination,
+            segment.mode,
+            segment.origin_city,
+            segment.destination_city,
+        )
         if route:
             segment.estimated_duration_minutes = route.duration_minutes
             segment.estimated_distance_km = route.distance_km
-            segment.notes = "Updated from MCP route data."
+            segment.notes = _append_note(segment.notes, "Updated from MCP route data.")
 
     for day in plan.days:
         for item in day.timeline:
             if not item.move:
                 continue
-            route = route_by_key.get((item.move.origin, item.move.destination, item.move.mode))
+            route = _find_route_result(
+                route_by_key,
+                item.move.origin,
+                item.move.destination,
+                item.move.mode,
+                item.move.origin_city,
+                item.move.destination_city,
+            )
             if route is None:
                 continue
             item.move.duration_minutes = route.duration_minutes
             item.move.distance_km = route.distance_km
-            item.move.notes = "Updated from MCP route data."
+            item.move.notes = _append_note(item.move.notes, "Updated from MCP route data.")
             item.end_time = _shift_time(item.start_time, route.duration_minutes)
+        _repair_day_timeline_continuity(day)
+        _remove_unverified_lodging_moves(day)
+        _remove_same_location_moves(day)
+        _fit_day_timeline_sequentially(day)
         _recalculate_day_totals(day)
     _recalculate_plan_totals(plan)
 
 
 def _apply_route_results_to_segments(segments: list[TripSegment], mcp_results: McpResults) -> None:
-    route_by_key = {(route.origin, route.destination, route.mode): route for route in mcp_results.routes}
+    route_by_key = {_route_result_key(route): route for route in mcp_results.routes}
     for segment in segments:
-        route = route_by_key.get((segment.origin, segment.destination, segment.mode))
+        route = _find_route_result(
+            route_by_key,
+            segment.origin,
+            segment.destination,
+            segment.mode,
+            segment.origin_city,
+            segment.destination_city,
+        )
         if route:
             segment.estimated_duration_minutes = route.duration_minutes
             segment.estimated_distance_km = route.distance_km
@@ -1327,10 +1842,225 @@ def _recalculate_day_totals(day: PlanDay) -> None:
             day.estimated_cost += item.move.estimated_cost
 
 
+def _fit_day_timeline_sequentially(day: PlanDay) -> None:
+    fitted: list[TimelineItem] = []
+    cursor = 0
+    for item in sorted(day.timeline, key=lambda current: (_time_to_minutes(current.start_time), current.sequence)):
+        original_duration = max(1, item.move.duration_minutes if item.move else item.duration_minutes)
+        start = max(_time_to_minutes(item.start_time), cursor)
+        end = start + original_duration
+        if end > 23 * 60 + 59:
+            if item.stay and item.stay.purpose in {StayPurpose.REST, StayPurpose.BUFFER, StayPurpose.MEAL}:
+                continue
+            end = 23 * 60 + 59
+        if end <= start:
+            continue
+        item.start_time = _minutes_to_time(start)
+        item.end_time = _minutes_to_time(end)
+        if item.move:
+            item.move.duration_minutes = end - start
+        if item.stay:
+            item.stay.duration_minutes = end - start
+        fitted.append(item)
+        cursor = end
+    day.timeline = fitted
+    _resequence_timeline(day.timeline)
+
+
+def _repair_day_timeline_continuity(day: PlanDay) -> None:
+    ordered = sorted(day.timeline, key=lambda current: (_time_to_minutes(current.start_time), current.sequence))
+    repaired: list[TimelineItem] = []
+    for item in ordered:
+        if not repaired:
+            repaired.append(item)
+            continue
+
+        previous = repaired[-1]
+        previous_locations = _timeline_primary_end_location_names(previous, day)
+        current_locations = _timeline_primary_start_location_names(item, day)
+        if _location_names_match(previous_locations, current_locations):
+            repaired.append(item)
+            continue
+
+        previous_location = _first_location(previous_locations, day.city)
+        current_location = _first_location(current_locations, day.city)
+        if not previous_location or not current_location or _place_matches_any(previous_location, [current_location]):
+            repaired.append(item)
+            continue
+        if _is_unverified_lodging_label(previous_location) or _is_unverified_lodging_label(current_location):
+            repaired.append(item)
+            continue
+
+        if item.move and item.move.purpose == MovePurpose.LOCAL and not (previous.move and _move_crosses_cities(previous.move)):
+            item.move.origin = previous_location
+            item.move.origin_city = _timeline_primary_end_city(previous, day)
+            repaired.append(item)
+            continue
+
+        if previous.move and previous.move.purpose == MovePurpose.LOCAL:
+            previous.move.destination = current_location
+            previous.move.destination_city = _timeline_primary_start_city(item, day)
+            repaired.append(item)
+            continue
+
+        if item.stay and _is_passive_stay(item.stay):
+            _move_stay_to_location(item.stay, previous_location, "Adjusted to preserve timeline location continuity.")
+            repaired.append(item)
+            continue
+
+        connector = _local_connector_after_previous(previous, item, day, previous_location, current_location)
+        if connector is not None:
+            repaired.append(connector)
+        repaired.append(item)
+
+    day.timeline = repaired
+    _resequence_timeline(day.timeline)
+
+
+def _repair_cross_day_timeline_continuity(plan: TripPlan) -> None:
+    days = sorted(plan.days, key=lambda current: (current.date, current.day))
+    for previous_day, current_day in zip(days, days[1:]):
+        previous_items = sorted(previous_day.timeline, key=lambda current: (_time_to_minutes(current.start_time), current.sequence))
+        current_items = sorted(current_day.timeline, key=lambda current: (_time_to_minutes(current.start_time), current.sequence))
+        if not previous_items or not current_items:
+            continue
+
+        previous = previous_items[-1]
+        current = current_items[0]
+        previous_locations = _timeline_primary_end_location_names(previous, previous_day)
+        current_locations = _timeline_primary_start_location_names(current, current_day)
+        if _location_names_match(previous_locations, current_locations):
+            continue
+
+        previous_location = _first_location(previous_locations, previous_day.city)
+        current_location = _first_location(current_locations, current_day.city)
+        if current.stay and _is_passive_stay(current.stay):
+            _move_stay_to_location(current.stay, previous_location, "Adjusted overnight location from previous day.")
+            continue
+        if current.move and current.move.purpose == MovePurpose.LOCAL:
+            current.move.origin = previous_location
+            current.move.origin_city = _timeline_primary_end_city(previous, previous_day)
+            continue
+        connector = _local_connector_between_locations(
+            sequence=1,
+            start_minute=0,
+            origin=previous_location,
+            destination=current_location,
+            origin_city=_timeline_primary_end_city(previous, previous_day),
+            destination_city=_timeline_primary_start_city(current, current_day),
+            city=current_day.city,
+            notes="Inserted deterministic cross-day continuity transfer.",
+        )
+        if connector is not None:
+            current_day.timeline.insert(0, connector)
+            _resequence_timeline(current_day.timeline)
+
+
+def _remove_same_location_moves(day: PlanDay) -> None:
+    day.timeline = [
+        item
+        for item in day.timeline
+        if not (
+            item.move
+            and item.move.purpose == MovePurpose.LOCAL
+            and _locations_equivalent(item.move.origin, item.move.destination)
+        )
+    ]
+    _resequence_timeline(day.timeline)
+
+
+def _remove_unverified_lodging_moves(day: PlanDay) -> None:
+    day.timeline = [
+        item
+        for item in day.timeline
+        if not (item.move and item.move.purpose == MovePurpose.LOCAL and _move_has_unverified_endpoint(item.move))
+    ]
+    _resequence_timeline(day.timeline)
+
+
+def _local_connector_after_previous(
+    previous: TimelineItem,
+    current: TimelineItem,
+    day: PlanDay,
+    origin: str,
+    destination: str,
+) -> TimelineItem | None:
+    start_minute = _time_to_minutes(previous.end_time)
+    if start_minute >= 23 * 60 + 59:
+        return None
+    return _local_connector_between_locations(
+        sequence=previous.sequence + 1,
+        start_minute=start_minute,
+        origin=origin,
+        destination=destination,
+        origin_city=_timeline_primary_end_city(previous, day),
+        destination_city=_timeline_primary_start_city(current, day),
+        city=day.city,
+        notes="Inserted deterministic continuity transfer.",
+    )
+
+
+def _local_connector_between_locations(
+    sequence: int,
+    start_minute: int,
+    origin: str,
+    destination: str,
+    origin_city: str,
+    destination_city: str,
+    city: str,
+    notes: str,
+) -> TimelineItem | None:
+    if _place_matches_any(origin, [destination]):
+        return None
+    duration = min(25, max(1, 23 * 60 + 59 - start_minute))
+    return TimelineItem(
+        sequence=sequence,
+        item_type=TimelineItemType.MOVE,
+        start_time=_minutes_to_time(start_minute),
+        end_time=_minutes_to_time(start_minute + duration),
+        city=city,
+        move=MoveDetail(
+            origin=origin,
+            destination=destination,
+            origin_city=origin_city,
+            destination_city=destination_city,
+            mode=TransportMode.TAXI,
+            purpose=MovePurpose.LOCAL,
+            duration_minutes=duration,
+            estimated_cost=30,
+            notes=notes,
+        ),
+    )
+
+
+def _first_location(names: list[str], fallback: str) -> str:
+    return next((name for name in names if name), fallback)
+
+
+def _timeline_primary_end_city(item: TimelineItem, day: PlanDay) -> str:
+    if item.move:
+        return item.move.destination_city or item.city or day.city
+    if item.stay:
+        return item.stay.city or item.city or day.city
+    return item.city or day.city
+
+
+def _timeline_primary_start_city(item: TimelineItem, day: PlanDay) -> str:
+    if item.move:
+        return item.move.origin_city or item.city or day.city
+    if item.stay:
+        return item.stay.city or item.city or day.city
+    return item.city or day.city
+
+
 def _sync_local_move_endpoints(day: PlanDay) -> None:
     ordered = sorted(day.timeline, key=lambda item: item.sequence)
     for index, item in enumerate(ordered):
         if not item.move or item.move.purpose != MovePurpose.LOCAL:
+            continue
+        if day.accommodation_area and _locations_equivalent(item.move.destination, day.accommodation_area):
+            continue
+        if _is_explicit_lodging_or_station_transfer(item.move):
             continue
         previous_stay = next((candidate.stay for candidate in reversed(ordered[:index]) if candidate.stay), None)
         next_stay = next((candidate.stay for candidate in ordered[index + 1 :] if candidate.stay), None)
@@ -1342,6 +2072,149 @@ def _sync_local_move_endpoints(day: PlanDay) -> None:
             item.move.destination = next_stay.place_name
         elif day.accommodation_area and previous_stay and previous_stay.purpose == StayPurpose.VISIT:
             item.move.destination = day.accommodation_area
+
+
+def _is_explicit_lodging_or_station_transfer(move: MoveDetail) -> bool:
+    notes = move.notes.lower()
+    return "arrival point to lodging" in notes or "lodging to return departure point" in notes
+
+
+def _is_station_or_lodging_transfer(move: MoveDetail, day: PlanDay) -> bool:
+    if _is_explicit_lodging_or_station_transfer(move):
+        return True
+    if move.purpose != MovePurpose.LOCAL or not day.accommodation_area:
+        return False
+    touches_lodging = _locations_equivalent(day.accommodation_area, move.origin) or _locations_equivalent(
+        day.accommodation_area,
+        move.destination,
+    )
+    touches_day_anchor = _locations_equivalent(day.city, move.origin) or _locations_equivalent(day.city, move.destination)
+    return touches_lodging and touches_day_anchor
+
+
+def _endpoint_is_lodging_reference(endpoint: str, accommodation_area: str | None) -> bool:
+    normalized = _normalize_place_name(endpoint)
+    if normalized in {"hotel", "lodging", "accommodation"}:
+        return True
+    return bool(accommodation_area and _locations_equivalent(endpoint, accommodation_area))
+
+
+def _normalize_passive_boundary_stays(day: PlanDay, request: TripRequest, days: list[PlanDay]) -> None:
+    items = _chronological_day_items(days)
+    outbound_seen = False
+    return_seen = False
+    for current_day, item in items:
+        if item.move and item.move.purpose == MovePurpose.OUTBOUND:
+            outbound_seen = True
+        if item.move and item.move.purpose == MovePurpose.RETURN and _place_matches_any(request.origin, [item.move.destination]):
+            return_seen = True
+            continue
+        if current_day is not day or not item.stay or not _is_passive_stay(item.stay):
+            continue
+        if not outbound_seen:
+            _move_stay_to_location(item.stay, request.origin, "Pre-trip rest at origin before outbound transfer.")
+        elif return_seen:
+            _move_stay_to_location(item.stay, request.origin, "Post-return rest at origin.")
+
+
+def _normalize_passive_stay_locations(day: PlanDay) -> None:
+    current_location = ""
+    current_city = day.city
+    for item in sorted(day.timeline, key=lambda current: (_time_to_minutes(current.start_time), current.sequence)):
+        if item.move:
+            if (
+                item.move.purpose == MovePurpose.LOCAL
+                and current_location
+                and not _place_matches_any(item.move.origin, [current_location, current_city])
+            ):
+                item.move.origin = current_location
+                item.move.origin_city = current_city
+            current_location = item.move.destination
+            current_city = item.move.destination_city or item.city
+            continue
+        if not item.stay:
+            continue
+        if current_location and _is_passive_stay(item.stay) and not _place_matches_any(
+            item.stay.place_name,
+            [current_location, current_city],
+        ):
+            item.stay.place_name = current_location
+            item.stay.city = current_city
+        current_location = item.stay.place_name
+        current_city = item.stay.city or item.city
+
+
+def _is_passive_stay(stay: StayDetail) -> bool:
+    return stay.purpose in {
+        StayPurpose.SLEEP,
+        StayPurpose.MEAL,
+        StayPurpose.REST,
+        StayPurpose.BUFFER,
+        StayPurpose.HOTEL_CHECKOUT,
+    }
+
+
+def _move_stay_to_location(stay: StayDetail, location: str, note: str) -> None:
+    stay.place_name = location
+    stay.city = location
+    stay.notes = f"{stay.notes} {note}".strip()
+
+
+def _fill_segment_city_context(segment: TripSegment, city_route_plan: CityRoutePlan, request: TripRequest) -> None:
+    if segment.segment_type == SegmentType.OUTBOUND:
+        segment.origin_city = segment.origin_city or request.origin
+        segment.destination_city = segment.destination_city or (
+            city_route_plan.stays[0].city if city_route_plan.stays else segment.destination
+        )
+    elif segment.segment_type == SegmentType.RETURN:
+        segment.origin_city = segment.origin_city or (
+            city_route_plan.stays[-1].city if city_route_plan.stays else segment.origin
+        )
+        segment.destination_city = segment.destination_city or request.origin
+    else:
+        segment.origin_city = segment.origin_city or segment.origin
+        segment.destination_city = segment.destination_city or segment.destination
+    segment.origin_city = _route_lookup_city(segment.origin_city, segment.origin, request)
+    segment.destination_city = _route_lookup_city(segment.destination_city, segment.destination, request)
+
+
+def _fill_day_move_city_context(day: PlanDay, request: TripRequest, city_route_plan: CityRoutePlan) -> None:
+    day_lookup_city = _route_lookup_city(day.city, day.city, request)
+    for item in day.timeline:
+        if not item.move:
+            continue
+        move = item.move
+        if move.purpose == MovePurpose.LOCAL:
+            move.origin_city = _usable_city_context(move.origin_city, move.origin, day_lookup_city)
+            move.destination_city = _usable_city_context(move.destination_city, move.destination, day_lookup_city)
+        elif move.purpose == MovePurpose.OUTBOUND:
+            move.origin_city = move.origin_city or request.origin
+            move.destination_city = move.destination_city or day_lookup_city
+        elif move.purpose == MovePurpose.RETURN:
+            move.origin_city = move.origin_city or day_lookup_city
+            move.destination_city = move.destination_city or request.origin
+        elif move.purpose == MovePurpose.INTERCITY:
+            move.origin_city = move.origin_city or move.origin
+            move.destination_city = move.destination_city or move.destination
+        move.origin_city = _route_lookup_city(move.origin_city, move.origin, request)
+        move.destination_city = _route_lookup_city(move.destination_city, move.destination, request)
+
+
+def _usable_city_context(current_city: str, endpoint: str, fallback_city: str) -> str:
+    if not current_city or _place_matches_any(current_city, [endpoint]):
+        return fallback_city
+    return current_city
+
+
+def _route_lookup_city(city: str, endpoint: str, request: TripRequest) -> str:
+    if _place_matches_any(request.origin, [endpoint, city]):
+        return request.origin
+    mapped = _anchor_city_for_place(request.destination, endpoint)
+    if mapped and mapped != request.destination:
+        return mapped
+    if city and not _is_vague_route_endpoint(city):
+        return city
+    return endpoint or city
 
 
 def _recalculate_plan_totals(plan: TripPlan) -> None:
@@ -1356,7 +2229,13 @@ def _recalculate_plan_totals(plan: TripPlan) -> None:
 def _route_query_from_segment(segment: TripSegment, stage: McpQueryStage) -> McpQuery:
     return McpQuery(
         tool_name=McpToolName.GET_ROUTE_TIME,
-        args={"origin": segment.origin, "destination": segment.destination, "mode": segment.mode.value},
+        args={
+            "origin": segment.origin,
+            "destination": segment.destination,
+            "origin_city": segment.origin_city or segment.origin,
+            "destination_city": segment.destination_city or segment.destination,
+            "mode": segment.mode.value,
+        },
         purpose=f"Verify {segment.segment_type.value} segment duration.",
         stage=stage,
     )
@@ -1365,10 +2244,72 @@ def _route_query_from_segment(segment: TripSegment, stage: McpQueryStage) -> Mcp
 def _route_query_from_move(move: MoveDetail, stage: McpQueryStage) -> McpQuery:
     return McpQuery(
         tool_name=McpToolName.GET_ROUTE_TIME,
-        args={"origin": move.origin, "destination": move.destination, "mode": move.mode.value},
+        args={
+            "origin": move.origin,
+            "destination": move.destination,
+            "origin_city": move.origin_city or move.origin,
+            "destination_city": move.destination_city or move.destination,
+            "mode": move.mode.value,
+        },
         purpose=f"Verify {move.purpose.value} move duration.",
         stage=stage,
     )
+
+
+def _accommodation_locations_by_name(plan: TripPlan) -> dict[str, str]:
+    locations: dict[str, str] = {}
+    for accommodation in plan.accommodations:
+        if accommodation.hotel_name and accommodation.location:
+            locations[accommodation.hotel_name] = accommodation.location
+        if accommodation.area and accommodation.location:
+            locations[accommodation.area] = accommodation.location
+    return locations
+
+
+def _attach_known_endpoint_locations(query: McpQuery, endpoint_locations: dict[str, str]) -> None:
+    origin = str(query.args.get("origin", ""))
+    destination = str(query.args.get("destination", ""))
+    if origin in endpoint_locations:
+        query.args["origin_location"] = endpoint_locations[origin]
+    if destination in endpoint_locations:
+        query.args["destination_location"] = endpoint_locations[destination]
+
+
+def _route_result_key(route: RouteResult) -> tuple[str, str, TransportMode, str, str]:
+    return (
+        route.origin,
+        route.destination,
+        route.mode,
+        route.origin_city,
+        route.destination_city,
+    )
+
+
+def _find_route_result(
+    route_by_key: dict[tuple[str, str, TransportMode, str, str], RouteResult],
+    origin: str,
+    destination: str,
+    mode: TransportMode,
+    origin_city: str,
+    destination_city: str,
+) -> RouteResult | None:
+    return route_by_key.get((origin, destination, mode, origin_city, destination_city)) or route_by_key.get(
+        (origin, destination, mode, "", "")
+    )
+
+
+def _route_matches_query(route: RouteResult, args: dict[str, Any]) -> bool:
+    mode = TransportMode(str(args.get("mode", TransportMode.TAXI.value)))
+    if route.origin != str(args["origin"]) or route.destination != str(args["destination"]) or route.mode != mode:
+        return False
+    return _city_context_matches(route.origin_city, str(args.get("origin_city", ""))) and _city_context_matches(
+        route.destination_city,
+        str(args.get("destination_city", "")),
+    )
+
+
+def _city_context_matches(result_city: str, query_city: str) -> bool:
+    return not result_city or not query_city or result_city == query_city
 
 
 def _dedupe_mcp_queries(queries: list[McpQuery]) -> list[McpQuery]:
@@ -1393,13 +2334,9 @@ def _query_result_exists(query: McpQuery, mcp_results: McpResults) -> bool:
         query_date = _parse_date(str(args["date"]))
         return any(item.city == str(args["city"]) and item.date == query_date for item in mcp_results.weather)
     if query.tool_name == McpToolName.GET_ROUTE_TIME:
-        mode = TransportMode(str(args.get("mode", TransportMode.TAXI.value)))
-        return any(
-            item.origin == str(args["origin"])
-            and item.destination == str(args["destination"])
-            and item.mode == mode
-            for item in mcp_results.routes
-        )
+        if args.get("origin_location") or args.get("destination_location"):
+            return False
+        return any(_route_matches_query(item, args) for item in mcp_results.routes)
     if query.tool_name == McpToolName.GET_ATTRACTION_DETAIL:
         query_date = _parse_date(str(args["date"]))
         query_city = str(args.get("city", ""))
@@ -1427,12 +2364,7 @@ def _extract_query_result_from_results(query: McpQuery, mcp_results: McpResults)
         items = [item for item in mcp_results.weather if item.city == str(args["city"]) and item.date == query_date]
         return McpResults(weather=items) if items else None
     if query.tool_name == McpToolName.GET_ROUTE_TIME:
-        mode = TransportMode(str(args.get("mode", TransportMode.TAXI.value)))
-        items = [
-            item
-            for item in mcp_results.routes
-            if item.origin == str(args["origin"]) and item.destination == str(args["destination"]) and item.mode == mode
-        ]
+        items = [item for item in mcp_results.routes if _route_matches_query(item, args)]
         return McpResults(routes=items) if items else None
     if query.tool_name == McpToolName.GET_ATTRACTION_DETAIL:
         query_date = _parse_date(str(args["date"]))
@@ -1469,6 +2401,15 @@ def _mcp_query_cache_key(query: McpQuery) -> str:
 
 def _stable_args_key(args: dict[str, Any]) -> str:
     return json.dumps(args, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def _update_skipped_existing_stats(state: TripState, skipped_count: int) -> dict[str, int]:
+    previous = state.get("mcp_cache_stats", {})
+    return {
+        **previous,
+        "skipped_existing_results": int(previous.get("skipped_existing_results", 0)) + skipped_count,
+        "last_skipped_existing_results": skipped_count,
+    }
 
 
 def _execute_mock_mcp_query_plan(query_plan: McpQueryPlan, default_city: str) -> McpResults:
@@ -1534,6 +2475,8 @@ def _execute_mock_mcp_query(query: McpQuery, default_city: str) -> McpResults:
                 RouteResult(
                     origin=str(raw["origin"]),
                     destination=str(raw["destination"]),
+                    origin_city=str(args.get("origin_city", args.get("city", default_city))),
+                    destination_city=str(args.get("destination_city", args.get("cityd", args.get("origin_city", default_city)))),
                     mode=TransportMode(str(raw["mode"])),
                     duration_minutes=int(raw["duration_minutes"]),
                     distance_km=float(raw["distance_km"]),
@@ -1592,13 +2535,30 @@ def _execute_mock_mcp_query(query: McpQuery, default_city: str) -> McpResults:
     raise ValueError(f"Unsupported MCP tool: {query.tool_name}")
 
 
+def _allow_mock_mcp_fallback(state: TripState) -> bool:
+    explicit = state.get("allow_mock_mcp_fallback")
+    if explicit is not None:
+        return bool(explicit)
+    return os.getenv("TRAVEL_AGENT_ALLOW_MOCK_MCP_FALLBACK", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _format_exception_detail(exc: BaseException) -> str:
+    if isinstance(exc, BaseExceptionGroup):
+        details = "; ".join(_format_exception_detail(item) for item in exc.exceptions[:5])
+        remaining = len(exc.exceptions) - 5
+        suffix = f"; ... {remaining} more" if remaining > 0 else ""
+        return f"{type(exc).__name__}: {details}{suffix}"
+    message = str(exc).strip()
+    return f"{type(exc).__name__}: {message}" if message else type(exc).__name__
+
+
 def _merge_mcp_results(existing: McpResults, incoming: McpResults) -> McpResults:
     weather = {(item.city, item.date): item for item in existing.weather}
     weather.update({(item.city, item.date): item for item in incoming.weather})
     attractions = {(item.name, item.city, item.date): item for item in existing.attractions}
     attractions.update({(item.name, item.city, item.date): item for item in incoming.attractions})
-    routes = {(item.origin, item.destination, item.mode): item for item in existing.routes}
-    routes.update({(item.origin, item.destination, item.mode): item for item in incoming.routes})
+    routes = {_route_result_key(item): item for item in existing.routes}
+    routes.update({_route_result_key(item): item for item in incoming.routes})
     areas = {(item.area_name, item.city): item for item in existing.accommodation_areas}
     areas.update({(item.area_name, item.city): item for item in incoming.accommodation_areas})
     lodging = {(item.name, item.city, item.anchor_place): item for item in _mcp_lodging(existing)}
@@ -1609,6 +2569,7 @@ def _merge_mcp_results(existing: McpResults, incoming: McpResults) -> McpResults
         routes=list(routes.values()),
         accommodation_areas=list(areas.values()),
         lodging=list(lodging.values()),
+        errors=[*existing.errors, *incoming.errors],
     )
 
 
@@ -1675,14 +2636,30 @@ def _format_date_time(day_value: date | None, time_value: time | None) -> str:
     return "unspecified"
 
 
+def _append_note(existing: str, note: str) -> str:
+    if not existing:
+        return note
+    if note in existing:
+        return existing
+    return f"{existing} {note}".strip()
+
+
 def _dedupe_and_sort_timeline(items: list[TimelineItem]) -> list[TimelineItem]:
     sorted_items = sorted(items, key=lambda item: (_time_to_minutes(item.start_time), item.sequence))
     deduped: list[TimelineItem] = []
     for item in sorted_items:
+        original_duration = max(1, item.move.duration_minutes if item.move else item.duration_minutes)
         if deduped and item.start_time < deduped[-1].end_time:
             item.start_time = deduped[-1].end_time
-            if item.end_time <= item.start_time:
-                item.end_time = _shift_time(item.start_time, 15)
+            if _time_to_minutes(item.start_time) >= 23 * 60 + 59:
+                continue
+            item.end_time = _minutes_to_time(min(23 * 60 + 59, _time_to_minutes(item.start_time) + original_duration))
+        if item.end_time <= item.start_time:
+            continue
+        if item.move:
+            item.move.duration_minutes = item.duration_minutes
+        if item.stay:
+            item.stay.duration_minutes = item.duration_minutes
         deduped.append(item)
     _resequence_timeline(deduped)
     return deduped
@@ -1743,12 +2720,113 @@ def _best_lodging_for_anchor(mcp_results: McpResults, city: str, anchor: str) ->
     ]
     if not candidates:
         candidates = [lodging for lodging in _mcp_lodging(mcp_results) if lodging.city == city]
-    return min(candidates, key=lambda item: item.duration_to_anchor_minutes or 9999) if candidates else None
+    candidates = [item for item in candidates if not _lodging_conflicts_with_anchor(item, anchor)]
+    scored = [
+        item
+        for item in candidates
+        if (item.location and item.distance_to_anchor_km > 0)
+        or (item.distance_to_anchor_km > 0 and item.duration_to_anchor_minutes > 0)
+    ]
+    if not scored:
+        return None
+    best = min(scored, key=lambda item: (item.duration_to_anchor_minutes or 9999, item.distance_to_anchor_km))
+    if (best.duration_to_anchor_minutes and best.duration_to_anchor_minutes <= 60) or best.distance_to_anchor_km <= 30:
+        return best
+    return None
 
 
-def _preferred_accommodation_area(mcp_results: McpResults, city: str) -> str:
+def _lodging_conflicts_with_anchor(lodging: LodgingResult, anchor: str) -> bool:
+    normalized_anchor = _normalize_place_name(anchor)
+    if "wutai" not in normalized_anchor:
+        return False
+    text = _normalize_place_name(f"{lodging.name} {lodging.area} {lodging.address} {lodging.city}")
+    return "taiyuan" in text
+
+
+def _preferred_accommodation_area(mcp_results: McpResults, city: str, anchor: str = "") -> str:
     area = next((item for item in mcp_results.accommodation_areas if item.city == city), None)
-    return area.area_name if area else f"{city} city center"
+    if area and not _is_vague_or_remote_accommodation_area(area.area_name, city):
+        return area.area_name
+    return _unverified_lodging_label(city, anchor)
+
+
+def _is_vague_or_remote_accommodation_area(area_name: str, city: str) -> bool:
+    normalized = _normalize_place_name(area_name)
+    normalized_city = _normalize_place_name(city)
+    if not normalized:
+        return True
+    remote_tokens = {"station", "railwaystation", "airport"}
+    if any(token in normalized for token in remote_tokens):
+        return True
+    lodging_poi_tokens = {"hotel", "inn", "guesthouse", "\u9152\u5e97", "\u6c11\u5bbf", "\u9a7f\u7ad9", "\u5bbe\u9986"}
+    if any(token in normalized for token in lodging_poi_tokens):
+        return True
+    if normalized_city and normalized == normalized_city:
+        return True
+    return False
+
+
+def _unverified_lodging_label(city: str, anchor: str = "") -> str:
+    suffix = f" near {anchor}" if anchor else ""
+    return f"{city} lodging unresolved{suffix}"
+
+
+def _is_unverified_lodging_label(value: str) -> bool:
+    normalized = _normalize_place_name(value)
+    return "lodgingunresolved" in normalized or "unverifiedlodging" in normalized or "tobeconfirmed" in normalized
+
+
+def _move_has_unverified_endpoint(move: MoveDetail) -> bool:
+    return _is_unverified_lodging_label(move.origin) or _is_unverified_lodging_label(move.destination)
+
+
+def _day_has_unreliable_lodging_routes(day: PlanDay) -> bool:
+    if not day.accommodation_area:
+        return False
+    for item in day.timeline:
+        if not item.move or item.move.purpose != MovePurpose.LOCAL:
+            continue
+        touches_lodging = _locations_equivalent(day.accommodation_area, item.move.origin) or _locations_equivalent(
+            day.accommodation_area,
+            item.move.destination,
+        )
+        if touches_lodging and (item.move.duration_minutes > 60 or item.move.distance_km > 30):
+            return True
+    return False
+
+
+def _mark_lodging_unresolved(day: PlanDay, anchor: str) -> None:
+    previous_lodging = day.accommodation_area or day.overnight_accommodation or ""
+    label = _unverified_lodging_label(day.city, anchor)
+    day.accommodation_area = label
+    if day.overnight_accommodation:
+        day.overnight_accommodation = label
+    filtered: list[TimelineItem] = []
+    for item in day.timeline:
+        if item.stay and item.stay.purpose in {
+            StayPurpose.SLEEP,
+            StayPurpose.REST,
+            StayPurpose.MEAL,
+            StayPurpose.HOTEL_CHECKIN,
+            StayPurpose.HOTEL_CHECKOUT,
+        }:
+            if not previous_lodging or _locations_equivalent(item.stay.place_name, previous_lodging):
+                item.stay.place_name = label
+                item.stay.notes = _append_note(item.stay.notes, "Lodging not verified by MCP.")
+        if item.move and item.move.purpose == MovePurpose.LOCAL:
+            touches_previous = previous_lodging and (
+                _locations_equivalent(item.move.origin, previous_lodging)
+                or _locations_equivalent(item.move.destination, previous_lodging)
+            )
+            touches_unverified = _is_unverified_lodging_label(item.move.origin) or _is_unverified_lodging_label(
+                item.move.destination
+            )
+            if touches_previous or touches_unverified:
+                continue
+        filtered.append(item)
+    day.timeline = filtered
+    day.daily_notes = _append_note(day.daily_notes, "Lodging remains unresolved because MCP did not provide a nearby verified option.")
+    _resequence_timeline(day.timeline)
 
 
 def _cost_for_budget(level: BudgetLevel, low: float, medium: float, high: float) -> float:
@@ -1880,6 +2958,7 @@ def _normalize_place_name(value: str) -> str:
         "_": "",
         "(": "",
         ")": "",
+        "'": "",
         "（": "",
         "）": "",
         "风景名胜区": "",
@@ -1891,35 +2970,62 @@ def _normalize_place_name(value: str) -> str:
     }
     for old, new in replacements.items():
         normalized = normalized.replace(old, new)
+    aliases = {
+        "wutaimountain": "wutai",
+        "wutaishan": "wutai",
+        "五台山": "wutai",
+        "五台": "wutai",
+        "xihu": "westlake",
+        "西湖": "westlake",
+        "humbleadministratorsgarden": "humbleadministratorgarden",
+        "thehumbleadministratorsgarden": "humbleadministratorgarden",
+        "zhuozhengyuan": "humbleadministratorgarden",
+        "拙政园": "humbleadministratorgarden",
+        "太原": "taiyuan",
+        "忻州": "xinzhou",
+        "台怀": "taihuai",
+        "杭州": "hangzhou",
+        "苏州": "suzhou",
+        "山西": "shanxi",
+        "浙江": "zhejiang",
+        "江苏": "jiangsu",
+    }
+    for old, new in aliases.items():
+        normalized = normalized.replace(old, new)
     return normalized
 
 
 def _anchor_city_for_place(destination: str, place: str) -> str:
     text = _normalize_place_name(f"{destination}{place}")
     rules = [
-        (("wutai", "五台"), "Xinzhou"),
+        (("wutai", "taihuai", "xinzhou"), "Xinzhou"),
+        (("westlake", "hangzhou"), "Hangzhou"),
+        (("humbleadministratorgarden", "suzhou"), "Suzhou"),
         (("yungang", "云冈", "云岗"), "Datong"),
         (("xuankong", "悬空", "恒山"), "Datong"),
         (("pingyao", "平遥", "乔家"), "Jinzhong"),
-        (("jinci", "晋祠", "taiyuan", "太原"), "Taiyuan"),
+        (("jinci", "晋祠", "taiyuan"), "Taiyuan"),
     ]
     for tokens, city in rules:
         if any(token in text for token in tokens):
             return city
-    if "shanxi" in text or "山西" in text:
+    if "shanxi" in text:
         return "Taiyuan"
+    if "zhejiang" in text:
+        return "Hangzhou"
+    if "jiangsu" in text:
+        return "Suzhou"
     return destination
 
 
 def _is_vague_route_endpoint(value: str) -> bool:
     normalized = _normalize_place_name(value)
+    if _is_unverified_lodging_label(value):
+        return True
     return normalized in {
         "shanxi",
-        "山西",
         "zhejiang",
-        "浙江",
         "jiangsu",
-        "江苏",
         "sichuan",
         "四川",
         "yunnan",

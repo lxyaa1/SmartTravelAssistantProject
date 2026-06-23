@@ -39,6 +39,9 @@ def generate_city_route_plan_with_llm(request: TripRequest) -> CityRoutePlan:
             "Always include a return segment from the last stay city back to request.origin when they differ.",
             "If request.destination is a broad region or province, infer concrete base cities from must-visit places.",
             "For every stay, set lodging_anchor to the primary attraction or area that accommodation should be near.",
+            "For every route segment, fill origin_city and destination_city with concrete city-level names used for map lookup.",
+            "Do not use a province or broad region as origin_city or destination_city when a concrete city is available.",
+            "For every route segment, mode must be exactly one transport_mode allowed value. If a route needs taxi plus train, choose the main intercity mode train.",
             "Do not invent train or flight numbers; leave train_or_flight_number empty unless present in input.",
         ],
         "allowed_values": _allowed_values(),
@@ -78,7 +81,13 @@ def generate_initial_plan_with_llm(
             "Use MCP lodging results near anchor places before generic accommodation areas.",
             "For day 1, include a move item with purpose=outbound from request.origin to the first stay city when they differ.",
             "For the last day, include a move item with purpose=return back to request.origin when origin and destination differ.",
+            "The first chronological timeline item must start at request.origin; do not place pre-departure sleep or breakfast in the destination city.",
+            "The last chronological timeline item must end at request.origin after the return move.",
+            "Every timeline item must start where the previous timeline item ended. If the location changes, insert a move item.",
             "For local transportation, use move items between lodging and attractions and between attractions.",
+            "For every route segment and move item, fill origin_city and destination_city with the concrete cities for map lookup.",
+            "For local moves, origin_city and destination_city are usually the day city; for intercity/outbound/return moves they must be the real endpoint cities.",
+            "For every route segment and move item, mode must be exactly one transport_mode allowed value. If a route needs taxi plus train, choose the main intercity mode train and put first/last-mile detail in notes.",
             "Do not invent optimistic route durations; use MCP route results when available and otherwise choose conservative estimates.",
             "Do not use province-level endpoints when a concrete city or attraction anchor is available.",
             "Do not invent train or flight numbers; leave train_or_flight_number empty unless present in input.",
@@ -121,6 +130,9 @@ def replan_with_llm(
             "Do not leave impossible 30-40 minute transfers when validation reports a much longer MCP route.",
             "If lodging is too far from attractions, choose a lodging result nearer to the affected anchor place.",
             "If a return move is missing, add a timeline item with move.purpose=return explicitly.",
+            "Keep origin_city and destination_city concrete on every route segment and move item; fix them when validation reports suspicious route data.",
+            "Every mode field must be exactly one transport_mode allowed value, never a combined string such as taxi + train.",
+            "Fix trip topology issues strictly: first item starts at request.origin, last item ends at request.origin, and adjacent timeline endpoints must connect.",
         ],
         "allowed_values": _allowed_values(),
         "request": request.model_dump(mode="json"),
@@ -184,7 +196,7 @@ def _chat_structured(
 
 
 def _repair_payload_for_schema(content: str, output_model: type[T]) -> dict[str, Any] | None:
-    if output_model is not TripPlan:
+    if output_model not in {CityRoutePlan, TripPlan}:
         return None
     try:
         payload = json.loads(content)
@@ -192,11 +204,20 @@ def _repair_payload_for_schema(content: str, output_model: type[T]) -> dict[str,
         return None
     if not isinstance(payload, dict):
         return None
+    if output_model is CityRoutePlan:
+        return _repair_city_route_plan_payload(payload)
     return _repair_trip_plan_payload(payload)
+
+
+def _repair_city_route_plan_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    repaired = deepcopy(payload)
+    _normalize_route_segments(repaired.get("segments"))
+    return repaired
 
 
 def _repair_trip_plan_payload(payload: dict[str, Any]) -> dict[str, Any]:
     repaired = deepcopy(payload)
+    _normalize_route_segments(repaired.get("route_segments"))
     days = repaired.get("days")
     if not isinstance(days, list):
         return repaired
@@ -335,6 +356,7 @@ def _normalize_stay_detail(stay: dict[str, Any]) -> None:
 
 
 def _normalize_move_detail(move: dict[str, Any]) -> None:
+    move["mode"] = _normalize_transport_mode(move.get("mode"))
     purpose = _normalize_token(move.get("purpose"))
     purpose_map = {
         "transfer": "local",
@@ -353,6 +375,31 @@ def _normalize_move_detail(move: dict[str, Any]) -> None:
     }
     if purpose not in {"local", "outbound", "intercity", "return"}:
         move["purpose"] = purpose_map.get(purpose, "local")
+
+
+def _normalize_route_segments(segments: Any) -> None:
+    if not isinstance(segments, list):
+        return
+    for segment in segments:
+        if isinstance(segment, dict):
+            segment["mode"] = _normalize_transport_mode(segment.get("mode"))
+
+
+def _normalize_transport_mode(value: Any) -> str:
+    text = _normalize_token(value)
+    if text in {"walk", "taxi", "transit", "train", "flight"}:
+        return text
+    if any(token in text for token in {"flight", "plane", "air"}):
+        return "flight"
+    if any(token in text for token in {"train", "rail", "railway", "high_speed", "bullet"}):
+        return "train"
+    if any(token in text for token in {"transit", "bus", "metro", "subway", "coach"}):
+        return "transit"
+    if any(token in text for token in {"taxi", "car", "drive", "driving", "cab"}):
+        return "taxi"
+    if any(token in text for token in {"walk", "walking"}):
+        return "walk"
+    return "taxi"
 
 
 def _normalize_token(value: Any) -> str:

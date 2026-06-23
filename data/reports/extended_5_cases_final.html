@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TravelAgent Batch Report</title>
+
+<style>
+:root { color-scheme: light; font-family: Arial, "Microsoft YaHei", sans-serif; }
+body { margin: 0; background: #f5f6f8; color: #20242a; }
+main { max-width: 1280px; margin: 0 auto; padding: 24px; }
+header { margin-bottom: 18px; }
+h1 { margin: 0 0 8px; font-size: 28px; }
+h2 { margin: 0 0 14px; font-size: 21px; }
+h3 { margin: 18px 0 8px; font-size: 16px; }
+.panel { background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; padding: 18px; margin: 16px 0; }
+.error-panel { border-color: #d64545; }
+.metrics { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px; margin: 12px 0; }
+.metrics div { border: 1px solid #dfe3e8; border-radius: 6px; padding: 10px; background: #fafbfc; }
+.metrics b { display: block; font-size: 18px; margin-bottom: 4px; }
+.metrics span, .muted { color: #69707a; }
+.quality { border-left: 4px solid #7c8798; padding-left: 10px; color: #414852; }
+.badge { display: inline-block; min-width: 72px; text-align: center; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.badge.ok { background: #dcfce7; color: #166534; }
+.badge.blocked { background: #fef3c7; color: #92400e; }
+.badge.error { background: #fee2e2; color: #991b1b; }
+table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 13px; }
+th, td { border: 1px solid #dfe3e8; padding: 7px 8px; vertical-align: top; }
+th { background: #f0f2f5; text-align: left; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #111827; color: #f9fafb; border-radius: 6px; padding: 12px; font-size: 12px; }
+details { margin: 10px 0; }
+summary { cursor: pointer; font-weight: 700; margin-bottom: 8px; }
+a { color: #195bd8; }
+@media (max-width: 900px) { .metrics { grid-template-columns: repeat(2, minmax(120px, 1fr)); } main { padding: 14px; } }
+</style>
+
+</head>
+<body>
+<main>
+<header>
+<h1>TravelAgent 批量规划测试报告</h1>
+<p>生成时间：2026-06-22T22:24:08 | MCP：amap | LLM：False | 最大重规划：1</p>
+</header>
+<section class="panel"><h2>总览</h2><table><thead><tr><th>案例</th><th>状态</th><th>问题</th><th>MCP 错误</th><th>路线</th><th>耗时</th></tr></thead><tbody><tr><td><a href="#case-1">Beijing family Chengdu pandas</a></td><td><span class="badge blocked">BLOCKED</span></td><td>13</td><td>0</td><td>3</td><td>31.3s</td></tr><tr><td><a href="#case-2">Guangzhou to Guilin river weekend</a></td><td><span class="badge blocked">BLOCKED</span></td><td>10</td><td>0</td><td>3</td><td>27.5s</td></tr><tr><td><a href="#case-3">Shanghai to Huangshan hiking</a></td><td><span class="badge blocked">BLOCKED</span></td><td>17</td><td>0</td><td>3</td><td>34.0s</td></tr><tr><td><a href="#case-4">Beijing to Nanjing history</a></td><td><span class="badge blocked">BLOCKED</span></td><td>11</td><td>0</td><td>3</td><td>30.6s</td></tr><tr><td><a href="#case-5">Shenzhen to Xiamen island</a></td><td><span class="badge blocked">BLOCKED</span></td><td>11</td><td>0</td><td>3</td><td>28.0s</td></tr></tbody></table></section>
+<section id="case-1" class="panel"><h2>Beijing family Chengdu pandas</h2><div class="metrics"><div><b>不可最终化</b><span>质量门禁</span></div><div><b>13</b><span>问题</span></div><div><b>0</b><span>MCP 错误</span></div><div><b>3</b><span>路线结果</span></div><div><b>31.3s</b><span>耗时</span></div></div><p class="quality">High or critical validation issues remain; final output is provisional.</p><details open><summary>问题列表</summary><table><thead><tr><th>严重度</th><th>类型</th><th>Day</th><th>地点</th><th>原因</th><th>建议</th></tr></thead><tbody><tr><td>high</td><td>missing_mcp_data</td><td></td><td>成都 lodging unresolved near 成都大熊猫繁育研究基地</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>high</td><td>route_too_long</td><td>1</td><td>北京, 成都</td><td>Intercity move takes 944 minutes.</td><td>Reserve more of the day for transfer or choose a nearer base city.</td></tr><tr><td>high</td><td>missing_mcp_data</td><td></td><td>成都 lodging unresolved near 成都大熊猫繁育研究基地</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>high</td><td>missing_mcp_data</td><td></td><td>成都 lodging unresolved near 成都大熊猫繁育研究基地</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>high</td><td>missing_mcp_data</td><td></td><td>成都 lodging unresolved near 成都大熊猫繁育研究基地</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>medium</td><td>incomplete_day_timeline</td><td>4</td><td>成都</td><td>Timeline covers only 914 minutes of the day.</td><td>Add sleep, meals, moves, rest, and buffers until the day is approximately covered.</td></tr><tr><td>medium</td><td>route_too_long</td><td>4</td><td>成都, 北京</td><td>Intercity move takes 419 minutes.</td><td>Reserve more of the day for transfer or choose a nearer base city.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>2</td><td>成都, 成都 lodging unresolved near 成都大熊猫繁育研究基地</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>2</td><td>成都 lodging unresolved near 成都大熊猫繁育研究基地, 成都大熊猫繁育研究基地</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>2</td><td>Family Store邻家便利(保利店), 成都 lodging unresolved near 成都大熊猫繁育研究基地</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>3</td><td>成都 lodging unresolved near 成都大熊猫繁育研究基地, 成都大熊猫繁育研究基地</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>3</td><td>Family Store邻家便利(保利店), 成都 lodging unresolved near 成都大熊猫繁育研究基地</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>4</td><td>成都 lodging unresolved near 成都大熊猫繁育研究基地, 成都</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr></tbody></table></details><details><summary>MCP 错误</summary><p class="muted">无。</p></details><details><summary>Cache 统计</summary><pre>{
+  &quot;hits&quot;: 0,
+  &quot;misses&quot;: 15,
+  &quot;last_hits&quot;: 0,
+  &quot;last_misses&quot;: 5,
+  &quot;entries&quot;: 15,
+  &quot;skipped_existing_results&quot;: 6,
+  &quot;last_skipped_existing_results&quot;: 6
+}</pre></details><details><summary>路线骨架</summary><table><thead><tr><th>#</th><th>类型</th><th>路线</th><th>交通</th><th>分钟</th><th>km</th><th>备注</th></tr></thead><tbody><tr><td>1</td><td>outbound</td><td>北京 -> 成都</td><td>train</td><td>1240</td><td>1850.61</td><td>Updated from MCP route data.</td></tr><tr><td>2</td><td>return</td><td>成都 -> 北京</td><td>train</td><td>1216</td><td>1823.42</td><td>Updated from MCP route data.</td></tr></tbody></table></details><details open><summary>每日时间线</summary><h3>Day 1 | 2026-08-10 | 成都</h3><p class="muted">住宿：成都 lodging unresolved near 成都大熊猫繁育研究基地</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>北京</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>北京</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>08:15:00 - 23:59:00</td><td>move</td><td>outbound</td><td>北京 -&gt; 成都</td><td>train</td><td>944</td><td>1850.61</td></tr></tbody></table>
+<h3>Day 2 | 2026-08-11 | 成都</h3><p class="muted">住宿：成都 lodging unresolved near 成都大熊猫繁育研究基地</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>成都</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>成都 lodging unresolved near 成都大熊猫繁育研究基地</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>09:35:00 - 11:35:00</td><td>stay</td><td>visit</td><td>成都大熊猫繁育研究基地</td><td></td><td>120</td><td></td></tr><tr><td>4</td><td>11:35:00 - 12:15:00</td><td>move</td><td>local</td><td>成都大熊猫繁育研究基地 -&gt; Family Store邻家便利(保利店)</td><td>taxi</td><td>40</td><td>33.5</td></tr><tr><td>5</td><td>12:15:00 - 14:15:00</td><td>stay</td><td>visit</td><td>Family Store邻家便利(保利店)</td><td></td><td>120</td><td></td></tr><tr><td>6</td><td>14:15:00 - 18:35:00</td><td>stay</td><td>rest</td><td>Family Store邻家便利(保利店)</td><td></td><td>260</td><td></td></tr><tr><td>7</td><td>18:35:00 - 19:35:00</td><td>stay</td><td>meal</td><td>Family Store邻家便利(保利店)</td><td></td><td>60</td><td></td></tr><tr><td>8</td><td>19:35:00 - 22:35:00</td><td>stay</td><td>rest</td><td>成都 lodging unresolved near 成都大熊猫繁育研究基地</td><td></td><td>180</td><td></td></tr><tr><td>9</td><td>22:35:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>成都 lodging unresolved near 成都大熊猫繁育研究基地</td><td></td><td>84</td><td></td></tr></tbody></table>
+<h3>Day 3 | 2026-08-12 | 成都</h3><p class="muted">住宿：成都 lodging unresolved near 成都大熊猫繁育研究基地</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>成都 lodging unresolved near 成都大熊猫繁育研究基地</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>成都 lodging unresolved near 成都大熊猫繁育研究基地</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>09:35:00 - 11:35:00</td><td>stay</td><td>visit</td><td>成都大熊猫繁育研究基地</td><td></td><td>120</td><td></td></tr><tr><td>4</td><td>11:35:00 - 12:15:00</td><td>move</td><td>local</td><td>成都大熊猫繁育研究基地 -&gt; Family Store邻家便利(保利店)</td><td>taxi</td><td>40</td><td>33.5</td></tr><tr><td>5</td><td>12:15:00 - 14:15:00</td><td>stay</td><td>visit</td><td>Family Store邻家便利(保利店)</td><td></td><td>120</td><td></td></tr><tr><td>6</td><td>14:15:00 - 18:35:00</td><td>stay</td><td>rest</td><td>Family Store邻家便利(保利店)</td><td></td><td>260</td><td></td></tr><tr><td>7</td><td>18:35:00 - 19:35:00</td><td>stay</td><td>meal</td><td>Family Store邻家便利(保利店)</td><td></td><td>60</td><td></td></tr><tr><td>8</td><td>19:35:00 - 22:35:00</td><td>stay</td><td>rest</td><td>成都 lodging unresolved near 成都大熊猫繁育研究基地</td><td></td><td>180</td><td></td></tr><tr><td>9</td><td>22:35:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>成都 lodging unresolved near 成都大熊猫繁育研究基地</td><td></td><td>84</td><td></td></tr></tbody></table>
+<h3>Day 4 | 2026-08-13 | 成都</h3><p class="muted">住宿：成都 lodging unresolved near 成都大熊猫繁育研究基地</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>成都 lodging unresolved near 成都大熊猫繁育研究基地</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>成都 lodging unresolved near 成都大熊猫繁育研究基地</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>17:00:00 - 23:59:00</td><td>move</td><td>return</td><td>成都 -&gt; 北京</td><td>train</td><td>419</td><td>1823.42</td></tr></tbody></table></details><details><summary>最终文本</summary><pre># 北京 to 成都 travel plan
+
+北京 -&gt; 成都
+
+## 状态
+
+当前计划还不能作为可执行行程使用，因为仍有必须解决的校验问题。
+High or critical validation issues remain; final output is provisional.
+
+## Route Skeleton
+
+- outbound: 北京 -&gt; 成都 by train, 2026-08-10 08:00 to 2026-08-10 23:59, 1240 min
+- return: 成都 -&gt; 北京 by train, 2026-08-13 17:00 to 2026-08-13 23:59, 1216 min
+
+## Accommodation
+
+- 成都: 成都 lodging unresolved near 成都大熊猫繁育研究基地, 2026-08-10 to 2026-08-14, near 成都大熊猫繁育研究基地
+
+## Day 1 - 2026-08-10 - 成都
+Accommodation area: 成都 lodging unresolved near 成都大熊猫繁育研究基地
+- 00:00-07:30 STAY 北京 (sleep), 450 min
+- 07:30-08:15 STAY 北京 (meal), 45 min
+- 08:15-23:59 MOVE 北京 -&gt; 成都 by train, 944 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 2 - 2026-08-11 - 成都
+Accommodation area: 成都 lodging unresolved near 成都大熊猫繁育研究基地
+- 00:00-07:30 STAY 成都 (sleep), 450 min
+- 07:30-08:15 STAY 成都 lodging unresolved near 成都大熊猫繁育研究基地 (meal), 45 min
+- 09:35-11:35 STAY 成都大熊猫繁育研究基地 (visit), 120 min
+- 11:35-12:15 MOVE 成都大熊猫繁育研究基地 -&gt; Family Store邻家便利(保利店) by taxi, 40 min
+- 12:15-14:15 STAY Family Store邻家便利(保利店) (visit), 120 min
+- 14:15-18:35 STAY Family Store邻家便利(保利店) (rest), 260 min
+- 18:35-19:35 STAY Family Store邻家便利(保利店) (meal), 60 min
+- 19:35-22:35 STAY 成都 lodging unresolved near 成都大熊猫繁育研究基地 (rest), 180 min
+- 22:35-23:59 STAY 成都 lodging unresolved near 成都大熊猫繁育研究基地 (sleep), 84 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 3 - 2026-08-12 - 成都
+Accommodation area: 成都 lodging unresolved near 成都大熊猫繁育研究基地
+- 00:00-07:30 STAY 成都 lodging unresolved near 成都大熊猫繁育研究基地 (sleep), 450 min
+- 07:30-08:15 STAY 成都 lodging unresolved near 成都大熊猫繁育研究基地 (meal), 45 min
+- 09:35-11:35 STAY 成都大熊猫繁育研究基地 (visit), 120 min
+- 11:35-12:15 MOVE 成都大熊猫繁育研究基地 -&gt; Family Store邻家便利(保利店) by taxi, 40 min
+- 12:15-14:15 STAY Family Store邻家便利(保利店) (visit), 120 min
+- 14:15-18:35 STAY Family Store邻家便利(保利店) (rest), 260 min
+- 18:35-19:35 STAY Family Store邻家便利(保利店) (meal), 60 min
+- 19:35-22:35 STAY 成都 lodging unresolved near 成都大熊猫繁育研究基地 (rest), 180 min
+- 22:35-23:59 STAY 成都 lodging unresolved near 成都大熊猫繁育研究基地 (sleep), 84 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 4 - 2026-08-13 - 成都
+Accommodation area: 成都 lodging unresolved near 成都大熊猫繁育研究基地
+- 00:00-07:30 STAY 成都 lodging unresolved near 成都大熊猫繁育研究基地 (sleep), 450 min
+- 07:30-08:15 STAY 成都 lodging unresolved near 成都大熊猫繁育研究基地 (meal), 45 min
+- 17:00-23:59 MOVE 成都 -&gt; 北京 by train, 419 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Unresolved Issues
+
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- high: Intercity move takes 944 minutes. Suggested: Reserve more of the day for transfer or choose a nearer base city.
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- medium: Timeline covers only 914 minutes of the day. Suggested: Add sleep, meals, moves, rest, and buffers until the day is approximately covered.
+- medium: Intercity move takes 419 minutes. Suggested: Reserve more of the day for transfer or choose a nearer base city.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.</pre></details><details><summary>原始输入</summary><pre>{
+  &quot;origin&quot;: &quot;北京&quot;,
+  &quot;destination&quot;: &quot;成都&quot;,
+  &quot;start_date&quot;: &quot;2026-08-10&quot;,
+  &quot;end_date&quot;: &quot;2026-08-13&quot;,
+  &quot;travelers&quot;: {
+    &quot;adults&quot;: 2,
+    &quot;children&quot;: 2,
+    &quot;children_need_bed&quot;: 1,
+    &quot;children_ages&quot;: [
+      5,
+      9
+    ]
+  },
+  &quot;budget_level&quot;: &quot;medium&quot;,
+  &quot;preferences&quot;: [
+    &quot;family friendly&quot;,
+    &quot;food&quot;,
+    &quot;relaxed&quot;,
+    &quot;animals&quot;
+  ],
+  &quot;must_visit&quot;: [
+    &quot;成都大熊猫繁育研究基地&quot;
+  ],
+  &quot;avoid&quot;: [
+    &quot;late night activities&quot;,
+    &quot;overly packed schedule&quot;
+  ]
+}</pre></details></section>
+<section id="case-2" class="panel"><h2>Guangzhou to Guilin river weekend</h2><div class="metrics"><div><b>不可最终化</b><span>质量门禁</span></div><div><b>10</b><span>问题</span></div><div><b>0</b><span>MCP 错误</span></div><div><b>3</b><span>路线结果</span></div><div><b>27.5s</b><span>耗时</span></div></div><p class="quality">High or critical validation issues remain; final output is provisional.</p><details open><summary>问题列表</summary><table><thead><tr><th>严重度</th><th>类型</th><th>Day</th><th>地点</th><th>原因</th><th>建议</th></tr></thead><tbody><tr><td>high</td><td>missing_mcp_data</td><td></td><td>桂林 lodging unresolved near 象鼻山</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>high</td><td>missing_mcp_data</td><td>1</td><td>桂林, 象鼻山</td><td>Timeline move has no matching MCP route result; 桂林 -&gt; 象鼻山 by taxi is unverified.</td><td>Do not use guessed durations; collect MCP route data or mark this transfer as unverified.</td></tr><tr><td>high</td><td>missing_mcp_data</td><td></td><td>桂林 lodging unresolved near 象鼻山</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>high</td><td>route_too_long</td><td>2</td><td>象鼻山, 漓江景区</td><td>Local move takes 97 minutes.</td><td>Choose closer lodging, reorder nearby stays, or split this part into another city/day.</td></tr><tr><td>high</td><td>missing_mcp_data</td><td></td><td>桂林 lodging unresolved near 象鼻山</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>medium</td><td>incomplete_day_timeline</td><td>3</td><td>桂林</td><td>Timeline covers only 873 minutes of the day.</td><td>Add sleep, meals, moves, rest, and buffers until the day is approximately covered.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>1</td><td>象鼻山, 桂林 lodging unresolved near 象鼻山</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>2</td><td>桂林 lodging unresolved near 象鼻山, 象鼻山</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>2</td><td>漓江景区, 桂林 lodging unresolved near 象鼻山</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>3</td><td>桂林 lodging unresolved near 象鼻山, 桂林</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr></tbody></table></details><details><summary>MCP 错误</summary><p class="muted">无。</p></details><details><summary>Cache 统计</summary><pre>{
+  &quot;hits&quot;: 0,
+  &quot;misses&quot;: 13,
+  &quot;last_hits&quot;: 0,
+  &quot;last_misses&quot;: 3,
+  &quot;entries&quot;: 13,
+  &quot;skipped_existing_results&quot;: 6,
+  &quot;last_skipped_existing_results&quot;: 6
+}</pre></details><details><summary>路线骨架</summary><table><thead><tr><th>#</th><th>类型</th><th>路线</th><th>交通</th><th>分钟</th><th>km</th><th>备注</th></tr></thead><tbody><tr><td>1</td><td>outbound</td><td>广州 -> 桂林</td><td>train</td><td>319</td><td>477.48</td><td>Updated from MCP route data.</td></tr><tr><td>2</td><td>return</td><td>桂林 -> 广州</td><td>train</td><td>318</td><td>476.85</td><td>Updated from MCP route data.</td></tr></tbody></table></details><details open><summary>每日时间线</summary><h3>Day 1 | 2026-09-05 | 桂林</h3><p class="muted">住宿：桂林 lodging unresolved near 象鼻山</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>广州</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>广州</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>08:15:00 - 13:34:00</td><td>move</td><td>outbound</td><td>广州 -&gt; 桂林</td><td>train</td><td>319</td><td>477.48</td></tr><tr><td>4</td><td>13:34:00 - 14:00:00</td><td>stay</td><td>meal</td><td>桂林</td><td></td><td>26</td><td></td></tr><tr><td>5</td><td>14:00:00 - 14:25:00</td><td>move</td><td>local</td><td>桂林 -&gt; 象鼻山</td><td>taxi</td><td>25</td><td>0.0</td></tr><tr><td>6</td><td>14:54:00 - 16:54:00</td><td>stay</td><td>visit</td><td>象鼻山</td><td></td><td>120</td><td></td></tr><tr><td>7</td><td>16:54:00 - 18:30:00</td><td>stay</td><td>rest</td><td>象鼻山</td><td></td><td>96</td><td></td></tr><tr><td>8</td><td>18:30:00 - 19:30:00</td><td>stay</td><td>meal</td><td>象鼻山</td><td></td><td>60</td><td></td></tr><tr><td>9</td><td>19:30:00 - 22:30:00</td><td>stay</td><td>rest</td><td>桂林 lodging unresolved near 象鼻山</td><td></td><td>180</td><td></td></tr><tr><td>10</td><td>22:30:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>桂林 lodging unresolved near 象鼻山</td><td></td><td>89</td><td></td></tr></tbody></table>
+<h3>Day 2 | 2026-09-06 | 桂林</h3><p class="muted">住宿：桂林 lodging unresolved near 象鼻山</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>桂林 lodging unresolved near 象鼻山</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>桂林 lodging unresolved near 象鼻山</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>09:35:00 - 11:35:00</td><td>stay</td><td>visit</td><td>象鼻山</td><td></td><td>120</td><td></td></tr><tr><td>4</td><td>11:35:00 - 13:12:00</td><td>move</td><td>local</td><td>象鼻山 -&gt; 漓江景区</td><td>taxi</td><td>97</td><td>96.41</td></tr><tr><td>5</td><td>13:12:00 - 15:12:00</td><td>stay</td><td>visit</td><td>漓江景区</td><td></td><td>120</td><td></td></tr><tr><td>6</td><td>15:12:00 - 19:32:00</td><td>stay</td><td>rest</td><td>漓江景区</td><td></td><td>260</td><td></td></tr><tr><td>7</td><td>19:32:00 - 20:32:00</td><td>stay</td><td>meal</td><td>漓江景区</td><td></td><td>60</td><td></td></tr><tr><td>8</td><td>20:32:00 - 23:32:00</td><td>stay</td><td>rest</td><td>桂林 lodging unresolved near 象鼻山</td><td></td><td>180</td><td></td></tr><tr><td>9</td><td>23:32:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>桂林 lodging unresolved near 象鼻山</td><td></td><td>27</td><td></td></tr></tbody></table>
+<h3>Day 3 | 2026-09-07 | 桂林</h3><p class="muted">住宿：桂林 lodging unresolved near 象鼻山</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>桂林 lodging unresolved near 象鼻山</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>桂林 lodging unresolved near 象鼻山</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>17:00:00 - 22:18:00</td><td>move</td><td>return</td><td>桂林 -&gt; 广州</td><td>train</td><td>318</td><td>476.85</td></tr><tr><td>4</td><td>22:18:00 - 23:18:00</td><td>stay</td><td>rest</td><td>广州</td><td></td><td>60</td><td></td></tr></tbody></table></details><details><summary>最终文本</summary><pre># 广州 to 桂林 travel plan
+
+广州 -&gt; 桂林
+
+## 状态
+
+当前计划还不能作为可执行行程使用，因为仍有必须解决的校验问题。
+High or critical validation issues remain; final output is provisional.
+
+## Route Skeleton
+
+- outbound: 广州 -&gt; 桂林 by train, 2026-09-05 08:00 to 2026-09-05 13:19, 319 min
+- return: 桂林 -&gt; 广州 by train, 2026-09-07 17:00 to 2026-09-07 22:18, 318 min
+
+## Accommodation
+
+- 桂林: 桂林 lodging unresolved near 象鼻山, 2026-09-05 to 2026-09-08, near 象鼻山, 漓江景区
+
+## Day 1 - 2026-09-05 - 桂林
+Accommodation area: 桂林 lodging unresolved near 象鼻山
+- 00:00-07:30 STAY 广州 (sleep), 450 min
+- 07:30-08:15 STAY 广州 (meal), 45 min
+- 08:15-13:34 MOVE 广州 -&gt; 桂林 by train, 319 min
+- 13:34-14:00 STAY 桂林 (meal), 26 min
+- 14:00-14:25 MOVE 桂林 -&gt; 象鼻山 by taxi, 25 min
+- 14:54-16:54 STAY 象鼻山 (visit), 120 min
+- 16:54-18:30 STAY 象鼻山 (rest), 96 min
+- 18:30-19:30 STAY 象鼻山 (meal), 60 min
+- 19:30-22:30 STAY 桂林 lodging unresolved near 象鼻山 (rest), 180 min
+- 22:30-23:59 STAY 桂林 lodging unresolved near 象鼻山 (sleep), 89 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 2 - 2026-09-06 - 桂林
+Accommodation area: 桂林 lodging unresolved near 象鼻山
+- 00:00-07:30 STAY 桂林 lodging unresolved near 象鼻山 (sleep), 450 min
+- 07:30-08:15 STAY 桂林 lodging unresolved near 象鼻山 (meal), 45 min
+- 09:35-11:35 STAY 象鼻山 (visit), 120 min
+- 11:35-13:12 MOVE 象鼻山 -&gt; 漓江景区 by taxi, 97 min
+- 13:12-15:12 STAY 漓江景区 (visit), 120 min
+- 15:12-19:32 STAY 漓江景区 (rest), 260 min
+- 19:32-20:32 STAY 漓江景区 (meal), 60 min
+- 20:32-23:32 STAY 桂林 lodging unresolved near 象鼻山 (rest), 180 min
+- 23:32-23:59 STAY 桂林 lodging unresolved near 象鼻山 (sleep), 27 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 3 - 2026-09-07 - 桂林
+Accommodation area: 桂林 lodging unresolved near 象鼻山
+- 00:00-07:30 STAY 桂林 lodging unresolved near 象鼻山 (sleep), 450 min
+- 07:30-08:15 STAY 桂林 lodging unresolved near 象鼻山 (meal), 45 min
+- 17:00-22:18 MOVE 桂林 -&gt; 广州 by train, 318 min
+- 22:18-23:18 STAY 广州 (rest), 60 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Unresolved Issues
+
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- high: Timeline move has no matching MCP route result; 桂林 -&gt; 象鼻山 by taxi is unverified. Suggested: Do not use guessed durations; collect MCP route data or mark this transfer as unverified.
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- high: Local move takes 97 minutes. Suggested: Choose closer lodging, reorder nearby stays, or split this part into another city/day.
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- medium: Timeline covers only 873 minutes of the day. Suggested: Add sleep, meals, moves, rest, and buffers until the day is approximately covered.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.</pre></details><details><summary>原始输入</summary><pre>{
+  &quot;origin&quot;: &quot;广州&quot;,
+  &quot;destination&quot;: &quot;桂林&quot;,
+  &quot;start_date&quot;: &quot;2026-09-05&quot;,
+  &quot;end_date&quot;: &quot;2026-09-07&quot;,
+  &quot;travelers&quot;: {
+    &quot;adults&quot;: 2,
+    &quot;children&quot;: 0,
+    &quot;children_need_bed&quot;: 0,
+    &quot;children_ages&quot;: []
+  },
+  &quot;budget_level&quot;: &quot;medium&quot;,
+  &quot;preferences&quot;: [
+    &quot;nature&quot;,
+    &quot;local food&quot;,
+    &quot;relaxed&quot;
+  ],
+  &quot;must_visit&quot;: [
+    &quot;象鼻山&quot;,
+    &quot;漓江景区&quot;
+  ],
+  &quot;avoid&quot;: [
+    &quot;long transfers&quot;
+  ]
+}</pre></details></section>
+<section id="case-3" class="panel"><h2>Shanghai to Huangshan hiking</h2><div class="metrics"><div><b>不可最终化</b><span>质量门禁</span></div><div><b>17</b><span>问题</span></div><div><b>0</b><span>MCP 错误</span></div><div><b>3</b><span>路线结果</span></div><div><b>34.0s</b><span>耗时</span></div></div><p class="quality">High or critical validation issues remain; final output is provisional.</p><details open><summary>问题列表</summary><table><thead><tr><th>严重度</th><th>类型</th><th>Day</th><th>地点</th><th>原因</th><th>建议</th></tr></thead><tbody><tr><td>high</td><td>missing_mcp_data</td><td></td><td>黄山 lodging unresolved near 黄山风景区</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>medium</td><td>bad_weather</td><td>1</td><td>黄山风景区</td><td>黄山风景区 is outdoor while 黄山 has bad weather on 2026-10-02.</td><td>Keep only if the user accepts weather risk, or move it to a better-weather day.</td></tr><tr><td>high</td><td>bad_weather</td><td>1</td><td>霸王山摇铃秀水景区</td><td>霸王山摇铃秀水景区 is outdoor while 黄山 has bad weather on 2026-10-02.</td><td>Move the outdoor visit to a better-weather day or replace it with an indoor stay.</td></tr><tr><td>high</td><td>missing_mcp_data</td><td></td><td>黄山 lodging unresolved near 黄山风景区</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>medium</td><td>bad_weather</td><td>2</td><td>黄山风景区</td><td>黄山风景区 is outdoor while 黄山 has bad weather on 2026-10-03.</td><td>Keep only if the user accepts weather risk, or move it to a better-weather day.</td></tr><tr><td>high</td><td>bad_weather</td><td>2</td><td>霸王山摇铃秀水景区</td><td>霸王山摇铃秀水景区 is outdoor while 黄山 has bad weather on 2026-10-03.</td><td>Move the outdoor visit to a better-weather day or replace it with an indoor stay.</td></tr><tr><td>high</td><td>missing_mcp_data</td><td></td><td>黄山 lodging unresolved near 黄山风景区</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>medium</td><td>bad_weather</td><td>3</td><td>黄山风景区</td><td>黄山风景区 is outdoor while 黄山 has bad weather on 2026-10-04.</td><td>Keep only if the user accepts weather risk, or move it to a better-weather day.</td></tr><tr><td>high</td><td>bad_weather</td><td>3</td><td>霸王山摇铃秀水景区</td><td>霸王山摇铃秀水景区 is outdoor while 黄山 has bad weather on 2026-10-04.</td><td>Move the outdoor visit to a better-weather day or replace it with an indoor stay.</td></tr><tr><td>high</td><td>missing_mcp_data</td><td></td><td>黄山 lodging unresolved near 黄山风景区</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>medium</td><td>incomplete_day_timeline</td><td>4</td><td>黄山</td><td>Timeline covers only 836 minutes of the day.</td><td>Add sleep, meals, moves, rest, and buffers until the day is approximately covered.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>1</td><td>霸王山摇铃秀水景区, 黄山 lodging unresolved near 黄山风景区</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>2</td><td>黄山 lodging unresolved near 黄山风景区, 黄山风景区</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>2</td><td>霸王山摇铃秀水景区, 黄山 lodging unresolved near 黄山风景区</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>3</td><td>黄山 lodging unresolved near 黄山风景区, 黄山风景区</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>3</td><td>霸王山摇铃秀水景区, 黄山 lodging unresolved near 黄山风景区</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>4</td><td>黄山 lodging unresolved near 黄山风景区, 黄山</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr></tbody></table></details><details><summary>MCP 错误</summary><p class="muted">无。</p></details><details><summary>Cache 统计</summary><pre>{
+  &quot;hits&quot;: 0,
+  &quot;misses&quot;: 16,
+  &quot;last_hits&quot;: 0,
+  &quot;last_misses&quot;: 6,
+  &quot;entries&quot;: 16,
+  &quot;skipped_existing_results&quot;: 7,
+  &quot;last_skipped_existing_results&quot;: 7
+}</pre></details><details><summary>路线骨架</summary><table><thead><tr><th>#</th><th>类型</th><th>路线</th><th>交通</th><th>分钟</th><th>km</th><th>备注</th></tr></thead><tbody><tr><td>1</td><td>outbound</td><td>上海 -> 黄山</td><td>train</td><td>278</td><td>409.51</td><td>Updated from MCP route data.</td></tr><tr><td>2</td><td>return</td><td>黄山 -> 上海</td><td>train</td><td>281</td><td>420.35</td><td>Updated from MCP route data.</td></tr></tbody></table></details><details open><summary>每日时间线</summary><h3>Day 1 | 2026-10-02 | 黄山</h3><p class="muted">住宿：黄山 lodging unresolved near 黄山风景区</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>上海</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>上海</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>08:15:00 - 12:53:00</td><td>move</td><td>outbound</td><td>上海 -&gt; 黄山</td><td>train</td><td>278</td><td>409.51</td></tr><tr><td>4</td><td>12:53:00 - 13:38:00</td><td>stay</td><td>meal</td><td>黄山</td><td></td><td>45</td><td></td></tr><tr><td>5</td><td>14:13:00 - 16:13:00</td><td>stay</td><td>visit</td><td>黄山风景区</td><td></td><td>120</td><td></td></tr><tr><td>6</td><td>16:13:00 - 17:43:00</td><td>move</td><td>local</td><td>黄山风景区 -&gt; 霸王山摇铃秀水景区</td><td>taxi</td><td>90</td><td>73.38</td></tr><tr><td>7</td><td>17:43:00 - 18:25:00</td><td>stay</td><td>visit</td><td>霸王山摇铃秀水景区</td><td></td><td>42</td><td></td></tr><tr><td>8</td><td>18:25:00 - 19:25:00</td><td>stay</td><td>rest</td><td>霸王山摇铃秀水景区</td><td></td><td>60</td><td></td></tr><tr><td>9</td><td>19:25:00 - 20:25:00</td><td>stay</td><td>meal</td><td>霸王山摇铃秀水景区</td><td></td><td>60</td><td></td></tr><tr><td>10</td><td>20:25:00 - 23:25:00</td><td>stay</td><td>rest</td><td>黄山 lodging unresolved near 黄山风景区</td><td></td><td>180</td><td></td></tr><tr><td>11</td><td>23:25:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>黄山 lodging unresolved near 黄山风景区</td><td></td><td>34</td><td></td></tr></tbody></table>
+<h3>Day 2 | 2026-10-03 | 黄山</h3><p class="muted">住宿：黄山 lodging unresolved near 黄山风景区</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>黄山 lodging unresolved near 黄山风景区</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>黄山 lodging unresolved near 黄山风景区</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>09:35:00 - 11:35:00</td><td>stay</td><td>visit</td><td>黄山风景区</td><td></td><td>120</td><td></td></tr><tr><td>4</td><td>11:35:00 - 13:05:00</td><td>move</td><td>local</td><td>黄山风景区 -&gt; 霸王山摇铃秀水景区</td><td>taxi</td><td>90</td><td>73.38</td></tr><tr><td>5</td><td>13:05:00 - 15:05:00</td><td>stay</td><td>visit</td><td>霸王山摇铃秀水景区</td><td></td><td>120</td><td></td></tr><tr><td>6</td><td>15:05:00 - 19:25:00</td><td>stay</td><td>rest</td><td>霸王山摇铃秀水景区</td><td></td><td>260</td><td></td></tr><tr><td>7</td><td>19:25:00 - 20:25:00</td><td>stay</td><td>meal</td><td>霸王山摇铃秀水景区</td><td></td><td>60</td><td></td></tr><tr><td>8</td><td>20:25:00 - 23:25:00</td><td>stay</td><td>rest</td><td>黄山 lodging unresolved near 黄山风景区</td><td></td><td>180</td><td></td></tr><tr><td>9</td><td>23:25:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>黄山 lodging unresolved near 黄山风景区</td><td></td><td>34</td><td></td></tr></tbody></table>
+<h3>Day 3 | 2026-10-04 | 黄山</h3><p class="muted">住宿：黄山 lodging unresolved near 黄山风景区</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>黄山 lodging unresolved near 黄山风景区</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>黄山 lodging unresolved near 黄山风景区</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>09:35:00 - 11:35:00</td><td>stay</td><td>visit</td><td>黄山风景区</td><td></td><td>120</td><td></td></tr><tr><td>4</td><td>11:35:00 - 13:05:00</td><td>move</td><td>local</td><td>黄山风景区 -&gt; 霸王山摇铃秀水景区</td><td>taxi</td><td>90</td><td>73.38</td></tr><tr><td>5</td><td>13:05:00 - 15:05:00</td><td>stay</td><td>visit</td><td>霸王山摇铃秀水景区</td><td></td><td>120</td><td></td></tr><tr><td>6</td><td>15:05:00 - 19:25:00</td><td>stay</td><td>rest</td><td>霸王山摇铃秀水景区</td><td></td><td>260</td><td></td></tr><tr><td>7</td><td>19:25:00 - 20:25:00</td><td>stay</td><td>meal</td><td>霸王山摇铃秀水景区</td><td></td><td>60</td><td></td></tr><tr><td>8</td><td>20:25:00 - 23:25:00</td><td>stay</td><td>rest</td><td>黄山 lodging unresolved near 黄山风景区</td><td></td><td>180</td><td></td></tr><tr><td>9</td><td>23:25:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>黄山 lodging unresolved near 黄山风景区</td><td></td><td>34</td><td></td></tr></tbody></table>
+<h3>Day 4 | 2026-10-05 | 黄山</h3><p class="muted">住宿：黄山 lodging unresolved near 黄山风景区</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>黄山 lodging unresolved near 黄山风景区</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>黄山 lodging unresolved near 黄山风景区</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>17:00:00 - 21:41:00</td><td>move</td><td>return</td><td>黄山 -&gt; 上海</td><td>train</td><td>281</td><td>420.35</td></tr><tr><td>4</td><td>21:41:00 - 22:41:00</td><td>stay</td><td>rest</td><td>上海</td><td></td><td>60</td><td></td></tr></tbody></table></details><details><summary>最终文本</summary><pre># 上海 to 黄山 travel plan
+
+上海 -&gt; 黄山
+
+## 状态
+
+当前计划还不能作为可执行行程使用，因为仍有必须解决的校验问题。
+High or critical validation issues remain; final output is provisional.
+
+## Route Skeleton
+
+- outbound: 上海 -&gt; 黄山 by train, 2026-10-02 08:00 to 2026-10-02 12:38, 278 min
+- return: 黄山 -&gt; 上海 by train, 2026-10-05 17:00 to 2026-10-05 21:41, 281 min
+
+## Accommodation
+
+- 黄山: 黄山 lodging unresolved near 黄山风景区, 2026-10-02 to 2026-10-06, near 黄山风景区
+
+## Day 1 - 2026-10-02 - 黄山
+Accommodation area: 黄山 lodging unresolved near 黄山风景区
+- 00:00-07:30 STAY 上海 (sleep), 450 min
+- 07:30-08:15 STAY 上海 (meal), 45 min
+- 08:15-12:53 MOVE 上海 -&gt; 黄山 by train, 278 min
+- 12:53-13:38 STAY 黄山 (meal), 45 min
+- 14:13-16:13 STAY 黄山风景区 (visit), 120 min
+- 16:13-17:43 MOVE 黄山风景区 -&gt; 霸王山摇铃秀水景区 by taxi, 90 min
+- 17:43-18:25 STAY 霸王山摇铃秀水景区 (visit), 42 min
+- 18:25-19:25 STAY 霸王山摇铃秀水景区 (rest), 60 min
+- 19:25-20:25 STAY 霸王山摇铃秀水景区 (meal), 60 min
+- 20:25-23:25 STAY 黄山 lodging unresolved near 黄山风景区 (rest), 180 min
+- 23:25-23:59 STAY 黄山 lodging unresolved near 黄山风景区 (sleep), 34 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 2 - 2026-10-03 - 黄山
+Accommodation area: 黄山 lodging unresolved near 黄山风景区
+- 00:00-07:30 STAY 黄山 lodging unresolved near 黄山风景区 (sleep), 450 min
+- 07:30-08:15 STAY 黄山 lodging unresolved near 黄山风景区 (meal), 45 min
+- 09:35-11:35 STAY 黄山风景区 (visit), 120 min
+- 11:35-13:05 MOVE 黄山风景区 -&gt; 霸王山摇铃秀水景区 by taxi, 90 min
+- 13:05-15:05 STAY 霸王山摇铃秀水景区 (visit), 120 min
+- 15:05-19:25 STAY 霸王山摇铃秀水景区 (rest), 260 min
+- 19:25-20:25 STAY 霸王山摇铃秀水景区 (meal), 60 min
+- 20:25-23:25 STAY 黄山 lodging unresolved near 黄山风景区 (rest), 180 min
+- 23:25-23:59 STAY 黄山 lodging unresolved near 黄山风景区 (sleep), 34 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 3 - 2026-10-04 - 黄山
+Accommodation area: 黄山 lodging unresolved near 黄山风景区
+- 00:00-07:30 STAY 黄山 lodging unresolved near 黄山风景区 (sleep), 450 min
+- 07:30-08:15 STAY 黄山 lodging unresolved near 黄山风景区 (meal), 45 min
+- 09:35-11:35 STAY 黄山风景区 (visit), 120 min
+- 11:35-13:05 MOVE 黄山风景区 -&gt; 霸王山摇铃秀水景区 by taxi, 90 min
+- 13:05-15:05 STAY 霸王山摇铃秀水景区 (visit), 120 min
+- 15:05-19:25 STAY 霸王山摇铃秀水景区 (rest), 260 min
+- 19:25-20:25 STAY 霸王山摇铃秀水景区 (meal), 60 min
+- 20:25-23:25 STAY 黄山 lodging unresolved near 黄山风景区 (rest), 180 min
+- 23:25-23:59 STAY 黄山 lodging unresolved near 黄山风景区 (sleep), 34 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 4 - 2026-10-05 - 黄山
+Accommodation area: 黄山 lodging unresolved near 黄山风景区
+- 00:00-07:30 STAY 黄山 lodging unresolved near 黄山风景区 (sleep), 450 min
+- 07:30-08:15 STAY 黄山 lodging unresolved near 黄山风景区 (meal), 45 min
+- 17:00-21:41 MOVE 黄山 -&gt; 上海 by train, 281 min
+- 21:41-22:41 STAY 上海 (rest), 60 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Unresolved Issues
+
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- medium: 黄山风景区 is outdoor while 黄山 has bad weather on 2026-10-02. Suggested: Keep only if the user accepts weather risk, or move it to a better-weather day.
+- high: 霸王山摇铃秀水景区 is outdoor while 黄山 has bad weather on 2026-10-02. Suggested: Move the outdoor visit to a better-weather day or replace it with an indoor stay.
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- medium: 黄山风景区 is outdoor while 黄山 has bad weather on 2026-10-03. Suggested: Keep only if the user accepts weather risk, or move it to a better-weather day.
+- high: 霸王山摇铃秀水景区 is outdoor while 黄山 has bad weather on 2026-10-03. Suggested: Move the outdoor visit to a better-weather day or replace it with an indoor stay.
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- medium: 黄山风景区 is outdoor while 黄山 has bad weather on 2026-10-04. Suggested: Keep only if the user accepts weather risk, or move it to a better-weather day.
+- high: 霸王山摇铃秀水景区 is outdoor while 黄山 has bad weather on 2026-10-04. Suggested: Move the outdoor visit to a better-weather day or replace it with an indoor stay.
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- medium: Timeline covers only 836 minutes of the day. Suggested: Add sleep, meals, moves, rest, and buffers until the day is approximately covered.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.</pre></details><details><summary>原始输入</summary><pre>{
+  &quot;origin&quot;: &quot;上海&quot;,
+  &quot;destination&quot;: &quot;黄山&quot;,
+  &quot;start_date&quot;: &quot;2026-10-02&quot;,
+  &quot;end_date&quot;: &quot;2026-10-05&quot;,
+  &quot;travelers&quot;: {
+    &quot;adults&quot;: 2,
+    &quot;children&quot;: 0,
+    &quot;children_need_bed&quot;: 0,
+    &quot;children_ages&quot;: []
+  },
+  &quot;budget_level&quot;: &quot;medium&quot;,
+  &quot;preferences&quot;: [
+    &quot;nature&quot;,
+    &quot;hiking&quot;,
+    &quot;scenic views&quot;
+  ],
+  &quot;must_visit&quot;: [
+    &quot;黄山风景区&quot;
+  ],
+  &quot;avoid&quot;: [
+    &quot;overly packed schedule&quot;,
+    &quot;unsafe bad-weather hikes&quot;
+  ]
+}</pre></details></section>
+<section id="case-4" class="panel"><h2>Beijing to Nanjing history</h2><div class="metrics"><div><b>不可最终化</b><span>质量门禁</span></div><div><b>11</b><span>问题</span></div><div><b>0</b><span>MCP 错误</span></div><div><b>3</b><span>路线结果</span></div><div><b>30.6s</b><span>耗时</span></div></div><p class="quality">High or critical validation issues remain; final output is provisional.</p><details open><summary>问题列表</summary><table><thead><tr><th>严重度</th><th>类型</th><th>Day</th><th>地点</th><th>原因</th><th>建议</th></tr></thead><tbody><tr><td>high</td><td>missing_mcp_data</td><td></td><td>南京 lodging unresolved near 南京博物院</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>medium</td><td>route_too_long</td><td>1</td><td>北京, 南京</td><td>Intercity move takes 664 minutes.</td><td>Reserve more of the day for transfer or choose a nearer base city.</td></tr><tr><td>high</td><td>missing_mcp_data</td><td></td><td>南京 lodging unresolved near 南京博物院</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>medium</td><td>bad_weather</td><td>2</td><td>中山陵</td><td>中山陵 is outdoor while 南京 has bad weather on 2026-07-11.</td><td>Keep only if the user accepts weather risk, or move it to a better-weather day.</td></tr><tr><td>high</td><td>missing_mcp_data</td><td></td><td>南京 lodging unresolved near 南京博物院</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>medium</td><td>incomplete_day_timeline</td><td>3</td><td>南京</td><td>Timeline covers only 914 minutes of the day.</td><td>Add sleep, meals, moves, rest, and buffers until the day is approximately covered.</td></tr><tr><td>medium</td><td>route_too_long</td><td>3</td><td>南京, 北京</td><td>Intercity move takes 419 minutes.</td><td>Reserve more of the day for transfer or choose a nearer base city.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>1</td><td>南京, 南京 lodging unresolved near 南京博物院</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>2</td><td>南京 lodging unresolved near 南京博物院, 南京博物院</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>2</td><td>中山陵, 南京 lodging unresolved near 南京博物院</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>3</td><td>南京 lodging unresolved near 南京博物院, 南京</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr></tbody></table></details><details><summary>MCP 错误</summary><p class="muted">无。</p></details><details><summary>Cache 统计</summary><pre>{
+  &quot;hits&quot;: 0,
+  &quot;misses&quot;: 13,
+  &quot;last_hits&quot;: 0,
+  &quot;last_misses&quot;: 3,
+  &quot;entries&quot;: 13,
+  &quot;skipped_existing_results&quot;: 5,
+  &quot;last_skipped_existing_results&quot;: 5
+}</pre></details><details><summary>路线骨架</summary><table><thead><tr><th>#</th><th>类型</th><th>路线</th><th>交通</th><th>分钟</th><th>km</th><th>备注</th></tr></thead><tbody><tr><td>1</td><td>outbound</td><td>北京 -> 南京</td><td>train</td><td>664</td><td>995.82</td><td>Updated from MCP route data.</td></tr><tr><td>2</td><td>return</td><td>南京 -> 北京</td><td>train</td><td>664</td><td>995.17</td><td>Updated from MCP route data.</td></tr></tbody></table></details><details open><summary>每日时间线</summary><h3>Day 1 | 2026-07-10 | 南京</h3><p class="muted">住宿：南京 lodging unresolved near 南京博物院</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>北京</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>北京</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>08:15:00 - 19:19:00</td><td>move</td><td>outbound</td><td>北京 -&gt; 南京</td><td>train</td><td>664</td><td>995.82</td></tr><tr><td>4</td><td>20:00:00 - 22:30:00</td><td>stay</td><td>rest</td><td>南京 lodging unresolved near 南京博物院</td><td></td><td>150</td><td></td></tr><tr><td>5</td><td>22:30:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>南京 lodging unresolved near 南京博物院</td><td></td><td>89</td><td></td></tr></tbody></table>
+<h3>Day 2 | 2026-07-11 | 南京</h3><p class="muted">住宿：南京 lodging unresolved near 南京博物院</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>南京 lodging unresolved near 南京博物院</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>南京 lodging unresolved near 南京博物院</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>09:35:00 - 11:35:00</td><td>stay</td><td>visit</td><td>南京博物院</td><td></td><td>120</td><td></td></tr><tr><td>4</td><td>11:35:00 - 11:52:00</td><td>move</td><td>local</td><td>南京博物院 -&gt; 中山陵</td><td>taxi</td><td>17</td><td>5.56</td></tr><tr><td>5</td><td>12:10:00 - 14:10:00</td><td>stay</td><td>visit</td><td>中山陵</td><td></td><td>120</td><td></td></tr><tr><td>6</td><td>14:10:00 - 18:30:00</td><td>stay</td><td>rest</td><td>中山陵</td><td></td><td>260</td><td></td></tr><tr><td>7</td><td>18:30:00 - 19:30:00</td><td>stay</td><td>meal</td><td>中山陵</td><td></td><td>60</td><td></td></tr><tr><td>8</td><td>19:30:00 - 22:30:00</td><td>stay</td><td>rest</td><td>南京 lodging unresolved near 南京博物院</td><td></td><td>180</td><td></td></tr><tr><td>9</td><td>22:30:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>南京 lodging unresolved near 南京博物院</td><td></td><td>89</td><td></td></tr></tbody></table>
+<h3>Day 3 | 2026-07-12 | 南京</h3><p class="muted">住宿：南京 lodging unresolved near 南京博物院</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>南京 lodging unresolved near 南京博物院</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>南京 lodging unresolved near 南京博物院</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>17:00:00 - 23:59:00</td><td>move</td><td>return</td><td>南京 -&gt; 北京</td><td>train</td><td>419</td><td>995.17</td></tr></tbody></table></details><details><summary>最终文本</summary><pre># 北京 to 南京 travel plan
+
+北京 -&gt; 南京
+
+## 状态
+
+当前计划还不能作为可执行行程使用，因为仍有必须解决的校验问题。
+High or critical validation issues remain; final output is provisional.
+
+## Route Skeleton
+
+- outbound: 北京 -&gt; 南京 by train, 2026-07-10 08:00 to 2026-07-10 19:04, 664 min
+- return: 南京 -&gt; 北京 by train, 2026-07-12 17:00 to 2026-07-12 23:59, 664 min
+
+## Accommodation
+
+- 南京: 南京 lodging unresolved near 南京博物院, 2026-07-10 to 2026-07-13, near 南京博物院, 中山陵
+
+## Day 1 - 2026-07-10 - 南京
+Accommodation area: 南京 lodging unresolved near 南京博物院
+- 00:00-07:30 STAY 北京 (sleep), 450 min
+- 07:30-08:15 STAY 北京 (meal), 45 min
+- 08:15-19:19 MOVE 北京 -&gt; 南京 by train, 664 min
+- 20:00-22:30 STAY 南京 lodging unresolved near 南京博物院 (rest), 150 min
+- 22:30-23:59 STAY 南京 lodging unresolved near 南京博物院 (sleep), 89 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 2 - 2026-07-11 - 南京
+Accommodation area: 南京 lodging unresolved near 南京博物院
+- 00:00-07:30 STAY 南京 lodging unresolved near 南京博物院 (sleep), 450 min
+- 07:30-08:15 STAY 南京 lodging unresolved near 南京博物院 (meal), 45 min
+- 09:35-11:35 STAY 南京博物院 (visit), 120 min
+- 11:35-11:52 MOVE 南京博物院 -&gt; 中山陵 by taxi, 17 min
+- 12:10-14:10 STAY 中山陵 (visit), 120 min
+- 14:10-18:30 STAY 中山陵 (rest), 260 min
+- 18:30-19:30 STAY 中山陵 (meal), 60 min
+- 19:30-22:30 STAY 南京 lodging unresolved near 南京博物院 (rest), 180 min
+- 22:30-23:59 STAY 南京 lodging unresolved near 南京博物院 (sleep), 89 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 3 - 2026-07-12 - 南京
+Accommodation area: 南京 lodging unresolved near 南京博物院
+- 00:00-07:30 STAY 南京 lodging unresolved near 南京博物院 (sleep), 450 min
+- 07:30-08:15 STAY 南京 lodging unresolved near 南京博物院 (meal), 45 min
+- 17:00-23:59 MOVE 南京 -&gt; 北京 by train, 419 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Unresolved Issues
+
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- medium: Intercity move takes 664 minutes. Suggested: Reserve more of the day for transfer or choose a nearer base city.
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- medium: 中山陵 is outdoor while 南京 has bad weather on 2026-07-11. Suggested: Keep only if the user accepts weather risk, or move it to a better-weather day.
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- medium: Timeline covers only 914 minutes of the day. Suggested: Add sleep, meals, moves, rest, and buffers until the day is approximately covered.
+- medium: Intercity move takes 419 minutes. Suggested: Reserve more of the day for transfer or choose a nearer base city.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.</pre></details><details><summary>原始输入</summary><pre>{
+  &quot;origin&quot;: &quot;北京&quot;,
+  &quot;destination&quot;: &quot;南京&quot;,
+  &quot;start_date&quot;: &quot;2026-07-10&quot;,
+  &quot;end_date&quot;: &quot;2026-07-12&quot;,
+  &quot;travelers&quot;: {
+    &quot;adults&quot;: 2,
+    &quot;children&quot;: 0,
+    &quot;children_need_bed&quot;: 0,
+    &quot;children_ages&quot;: []
+  },
+  &quot;budget_level&quot;: &quot;medium&quot;,
+  &quot;preferences&quot;: [
+    &quot;history&quot;,
+    &quot;museum&quot;,
+    &quot;culture&quot;
+  ],
+  &quot;must_visit&quot;: [
+    &quot;南京博物院&quot;,
+    &quot;中山陵&quot;
+  ],
+  &quot;avoid&quot;: [
+    &quot;long transfers&quot;
+  ]
+}</pre></details></section>
+<section id="case-5" class="panel"><h2>Shenzhen to Xiamen island</h2><div class="metrics"><div><b>不可最终化</b><span>质量门禁</span></div><div><b>11</b><span>问题</span></div><div><b>0</b><span>MCP 错误</span></div><div><b>3</b><span>路线结果</span></div><div><b>28.0s</b><span>耗时</span></div></div><p class="quality">High or critical validation issues remain; final output is provisional.</p><details open><summary>问题列表</summary><table><thead><tr><th>严重度</th><th>类型</th><th>Day</th><th>地点</th><th>原因</th><th>建议</th></tr></thead><tbody><tr><td>high</td><td>missing_mcp_data</td><td></td><td>厦门 lodging unresolved near 鼓浪屿</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>medium</td><td>route_too_long</td><td>1</td><td>深圳, 厦门</td><td>Intercity move takes 390 minutes.</td><td>Reserve more of the day for transfer or choose a nearer base city.</td></tr><tr><td>high</td><td>missing_mcp_data</td><td>1</td><td>厦门, 鼓浪屿</td><td>Timeline move has no matching MCP route result; 厦门 -&gt; 鼓浪屿 by taxi is unverified.</td><td>Do not use guessed durations; collect MCP route data or mark this transfer as unverified.</td></tr><tr><td>high</td><td>missing_mcp_data</td><td></td><td>厦门 lodging unresolved near 鼓浪屿</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>high</td><td>missing_mcp_data</td><td></td><td>厦门 lodging unresolved near 鼓浪屿</td><td>No verified lodging candidate with usable location data is available for this day.</td><td>Fetch a real lodging candidate near the main anchor before finalizing the plan.</td></tr><tr><td>medium</td><td>incomplete_day_timeline</td><td>3</td><td>厦门</td><td>Timeline covers only 914 minutes of the day.</td><td>Add sleep, meals, moves, rest, and buffers until the day is approximately covered.</td></tr><tr><td>medium</td><td>route_too_long</td><td>3</td><td>厦门, 深圳</td><td>Intercity move takes 385 minutes.</td><td>Reserve more of the day for transfer or choose a nearer base city.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>1</td><td>鼓浪屿, 厦门 lodging unresolved near 鼓浪屿</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>2</td><td>厦门 lodging unresolved near 鼓浪屿, 鼓浪屿</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>2</td><td>Free Island, 厦门 lodging unresolved near 鼓浪屿</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr><tr><td>high</td><td>infeasible_plan</td><td>3</td><td>厦门 lodging unresolved near 鼓浪屿, 厦门</td><td>Adjacent timeline items do not connect: previous end location differs from next start location.</td><td>Insert a move item or correct endpoints so each item starts where the previous item ended.</td></tr></tbody></table></details><details><summary>MCP 错误</summary><p class="muted">无。</p></details><details><summary>Cache 统计</summary><pre>{
+  &quot;hits&quot;: 0,
+  &quot;misses&quot;: 12,
+  &quot;last_hits&quot;: 0,
+  &quot;last_misses&quot;: 3,
+  &quot;entries&quot;: 12,
+  &quot;skipped_existing_results&quot;: 6,
+  &quot;last_skipped_existing_results&quot;: 6
+}</pre></details><details><summary>路线骨架</summary><table><thead><tr><th>#</th><th>类型</th><th>路线</th><th>交通</th><th>分钟</th><th>km</th><th>备注</th></tr></thead><tbody><tr><td>1</td><td>outbound</td><td>深圳 -> 厦门</td><td>train</td><td>390</td><td>583.67</td><td>Updated from MCP route data.</td></tr><tr><td>2</td><td>return</td><td>厦门 -> 深圳</td><td>train</td><td>385</td><td>576.7</td><td>Updated from MCP route data.</td></tr></tbody></table></details><details open><summary>每日时间线</summary><h3>Day 1 | 2026-08-21 | 厦门</h3><p class="muted">住宿：厦门 lodging unresolved near 鼓浪屿</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>深圳</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>深圳</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>08:15:00 - 14:45:00</td><td>move</td><td>outbound</td><td>深圳 -&gt; 厦门</td><td>train</td><td>390</td><td>583.67</td></tr><tr><td>4</td><td>14:45:00 - 15:10:00</td><td>move</td><td>local</td><td>厦门 -&gt; 鼓浪屿</td><td>taxi</td><td>25</td><td>0.0</td></tr><tr><td>5</td><td>16:05:00 - 17:30:00</td><td>stay</td><td>visit</td><td>鼓浪屿</td><td></td><td>85</td><td></td></tr><tr><td>6</td><td>17:30:00 - 18:30:00</td><td>stay</td><td>rest</td><td>鼓浪屿</td><td></td><td>60</td><td></td></tr><tr><td>7</td><td>18:30:00 - 19:30:00</td><td>stay</td><td>meal</td><td>鼓浪屿</td><td></td><td>60</td><td></td></tr><tr><td>8</td><td>19:30:00 - 22:30:00</td><td>stay</td><td>rest</td><td>厦门 lodging unresolved near 鼓浪屿</td><td></td><td>180</td><td></td></tr><tr><td>9</td><td>22:30:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>厦门 lodging unresolved near 鼓浪屿</td><td></td><td>89</td><td></td></tr></tbody></table>
+<h3>Day 2 | 2026-08-22 | 厦门</h3><p class="muted">住宿：厦门 lodging unresolved near 鼓浪屿</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>厦门 lodging unresolved near 鼓浪屿</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>厦门 lodging unresolved near 鼓浪屿</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>09:35:00 - 11:35:00</td><td>stay</td><td>visit</td><td>鼓浪屿</td><td></td><td>120</td><td></td></tr><tr><td>4</td><td>11:35:00 - 12:06:00</td><td>move</td><td>local</td><td>鼓浪屿 -&gt; Free Island</td><td>taxi</td><td>31</td><td>20.25</td></tr><tr><td>5</td><td>12:10:00 - 14:10:00</td><td>stay</td><td>visit</td><td>Free Island</td><td></td><td>120</td><td></td></tr><tr><td>6</td><td>14:10:00 - 18:30:00</td><td>stay</td><td>rest</td><td>Free Island</td><td></td><td>260</td><td></td></tr><tr><td>7</td><td>18:30:00 - 19:30:00</td><td>stay</td><td>meal</td><td>Free Island</td><td></td><td>60</td><td></td></tr><tr><td>8</td><td>19:30:00 - 22:30:00</td><td>stay</td><td>rest</td><td>厦门 lodging unresolved near 鼓浪屿</td><td></td><td>180</td><td></td></tr><tr><td>9</td><td>22:30:00 - 23:59:00</td><td>stay</td><td>sleep</td><td>厦门 lodging unresolved near 鼓浪屿</td><td></td><td>89</td><td></td></tr></tbody></table>
+<h3>Day 3 | 2026-08-23 | 厦门</h3><p class="muted">住宿：厦门 lodging unresolved near 鼓浪屿</p><table><thead><tr><th>#</th><th>时间</th><th>类型</th><th>目的</th><th>地点/路线</th><th>交通</th><th>分钟</th><th>km</th></tr></thead><tbody><tr><td>1</td><td>00:00:00 - 07:30:00</td><td>stay</td><td>sleep</td><td>厦门 lodging unresolved near 鼓浪屿</td><td></td><td>450</td><td></td></tr><tr><td>2</td><td>07:30:00 - 08:15:00</td><td>stay</td><td>meal</td><td>厦门 lodging unresolved near 鼓浪屿</td><td></td><td>45</td><td></td></tr><tr><td>3</td><td>17:00:00 - 23:25:00</td><td>move</td><td>return</td><td>厦门 -&gt; 深圳</td><td>train</td><td>385</td><td>576.7</td></tr><tr><td>4</td><td>23:25:00 - 23:59:00</td><td>stay</td><td>rest</td><td>深圳</td><td></td><td>34</td><td></td></tr></tbody></table></details><details><summary>最终文本</summary><pre># 深圳 to 厦门 travel plan
+
+深圳 -&gt; 厦门
+
+## 状态
+
+当前计划还不能作为可执行行程使用，因为仍有必须解决的校验问题。
+High or critical validation issues remain; final output is provisional.
+
+## Route Skeleton
+
+- outbound: 深圳 -&gt; 厦门 by train, 2026-08-21 08:00 to 2026-08-21 14:30, 390 min
+- return: 厦门 -&gt; 深圳 by train, 2026-08-23 17:00 to 2026-08-23 23:25, 385 min
+
+## Accommodation
+
+- 厦门: 厦门 lodging unresolved near 鼓浪屿, 2026-08-21 to 2026-08-24, near 鼓浪屿
+
+## Day 1 - 2026-08-21 - 厦门
+Accommodation area: 厦门 lodging unresolved near 鼓浪屿
+- 00:00-07:30 STAY 深圳 (sleep), 450 min
+- 07:30-08:15 STAY 深圳 (meal), 45 min
+- 08:15-14:45 MOVE 深圳 -&gt; 厦门 by train, 390 min
+- 14:45-15:10 MOVE 厦门 -&gt; 鼓浪屿 by taxi, 25 min
+- 16:05-17:30 STAY 鼓浪屿 (visit), 85 min
+- 17:30-18:30 STAY 鼓浪屿 (rest), 60 min
+- 18:30-19:30 STAY 鼓浪屿 (meal), 60 min
+- 19:30-22:30 STAY 厦门 lodging unresolved near 鼓浪屿 (rest), 180 min
+- 22:30-23:59 STAY 厦门 lodging unresolved near 鼓浪屿 (sleep), 89 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 2 - 2026-08-22 - 厦门
+Accommodation area: 厦门 lodging unresolved near 鼓浪屿
+- 00:00-07:30 STAY 厦门 lodging unresolved near 鼓浪屿 (sleep), 450 min
+- 07:30-08:15 STAY 厦门 lodging unresolved near 鼓浪屿 (meal), 45 min
+- 09:35-11:35 STAY 鼓浪屿 (visit), 120 min
+- 11:35-12:06 MOVE 鼓浪屿 -&gt; Free Island by taxi, 31 min
+- 12:10-14:10 STAY Free Island (visit), 120 min
+- 14:10-18:30 STAY Free Island (rest), 260 min
+- 18:30-19:30 STAY Free Island (meal), 60 min
+- 19:30-22:30 STAY 厦门 lodging unresolved near 鼓浪屿 (rest), 180 min
+- 22:30-23:59 STAY 厦门 lodging unresolved near 鼓浪屿 (sleep), 89 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Day 3 - 2026-08-23 - 厦门
+Accommodation area: 厦门 lodging unresolved near 鼓浪屿
+- 00:00-07:30 STAY 厦门 lodging unresolved near 鼓浪屿 (sleep), 450 min
+- 07:30-08:15 STAY 厦门 lodging unresolved near 鼓浪屿 (meal), 45 min
+- 17:00-23:25 MOVE 厦门 -&gt; 深圳 by train, 385 min
+- 23:25-23:59 STAY 深圳 (rest), 34 min
+Notes: Initial deterministic draft. MCP validation may adjust move durations.
+
+## Unresolved Issues
+
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- medium: Intercity move takes 390 minutes. Suggested: Reserve more of the day for transfer or choose a nearer base city.
+- high: Timeline move has no matching MCP route result; 厦门 -&gt; 鼓浪屿 by taxi is unverified. Suggested: Do not use guessed durations; collect MCP route data or mark this transfer as unverified.
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- high: No verified lodging candidate with usable location data is available for this day. Suggested: Fetch a real lodging candidate near the main anchor before finalizing the plan.
+- medium: Timeline covers only 914 minutes of the day. Suggested: Add sleep, meals, moves, rest, and buffers until the day is approximately covered.
+- medium: Intercity move takes 385 minutes. Suggested: Reserve more of the day for transfer or choose a nearer base city.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.
+- high: Adjacent timeline items do not connect: previous end location differs from next start location. Suggested: Insert a move item or correct endpoints so each item starts where the previous item ended.</pre></details><details><summary>原始输入</summary><pre>{
+  &quot;origin&quot;: &quot;深圳&quot;,
+  &quot;destination&quot;: &quot;厦门&quot;,
+  &quot;start_date&quot;: &quot;2026-08-21&quot;,
+  &quot;end_date&quot;: &quot;2026-08-23&quot;,
+  &quot;travelers&quot;: {
+    &quot;adults&quot;: 3,
+    &quot;children&quot;: 0,
+    &quot;children_need_bed&quot;: 0,
+    &quot;children_ages&quot;: []
+  },
+  &quot;budget_level&quot;: &quot;medium&quot;,
+  &quot;preferences&quot;: [
+    &quot;island&quot;,
+    &quot;food&quot;,
+    &quot;walkable&quot;,
+    &quot;culture&quot;
+  ],
+  &quot;must_visit&quot;: [
+    &quot;鼓浪屿&quot;
+  ],
+  &quot;avoid&quot;: [
+    &quot;overly packed schedule&quot;
+  ]
+}</pre></details></section>
+</main>
+</body>
+</html>
